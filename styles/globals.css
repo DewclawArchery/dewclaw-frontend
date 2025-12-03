@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ROOT COLORS ------------------------------------------------------------ */
+
+:root {
+  --dew-gold: #f9a51a;
+  --dew-bg: #0c0c0c; /* charcoal */
+}
+
+/* GLOBAL RESET ----------------------------------------------------------- */
+
+body {
+  @apply bg-[var(--dew-bg)] text-slate-100 antialiased;
+  overflow-x: hidden;
+}
+
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+/* PAGE-SHELL (NON-HOME PAGES) ------------------------------------------- */
+
+.page-shell {
+  @apply relative w-full overflow-hidden px-4 py-20 md:px-6 lg:px-8;
+  min-height: 100vh;
+}
+
+/* Forest silhouette (CORRECT orientation) */
+.page-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/forest-silhouette.png');
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: cover;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Topo overlay */
+.page-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/topo-overlay.png');
+  background-size: 200%;
+  background-position: center;
+  background-repeat: repeat;
+  opacity: 0.10;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* HERO SECTION ----------------------------------------------------------- */
+
+.hero-shell {
+  @apply relative w-full overflow-hidden;
+  min-height: calc(100vh - 4rem);
+  width: 100vw;
+  background-color: var(--dew-bg);
+}
+
+/* Video */
+.hero-video {
+  @apply absolute inset-0 w-full h-full object-cover pointer-events-none;
+  z-index: 0;
+}
+
+/* Fallback still */
+.hero-fallback {
+  @apply absolute inset-0 w-full h-full bg-cover bg-center bg-no-repeat;
+  background-image: url('/images/hero-bg-base.png');
+  z-index: -1;
+}
+
+/* Topo overlay */
+.hero-topo-layer {
+  @apply absolute inset-0 w-full h-full;
+  background-image: url('/images/topo-overlay.png');
+  background-size: 170%;
+  background-position: center;
+  background-repeat: repeat;
+  opacity: 0.14;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Gradient overlay */
+.hero-gradient {
+  @apply absolute inset-0 w-full h-full;
+  background:
+    linear-gradient(to bottom, rgba(12,12,12,0.2), rgba(12,12,12,0.9)),
+    radial-gradient(circle at top left, rgba(249,165,26,0.16), transparent 55%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* CONTENT PANELS --------------------------------------------------------- */
+
+.content-panel {
+  @apply relative rounded-xl border p-8 shadow-xl shadow-black/40 backdrop-blur;
+  border-color: rgba(255,255,255,0.05);
+  background-color: rgba(17,48,34,0.65); /* <-- Deep forest green option */
+}
+
+/* BUTTONS --------------------------------------------------------------- */
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-[var(--dew-gold)] px-6 py-3 text-sm font-semibold text-black shadow-xl shadow-amber-500/40 transition-all hover:bg-amber-400 hover:shadow-amber-400/50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-full border border-slate-400/50 px-6 py-3 text-sm font-semibold text-slate-200 transition-all hover:bg-slate-800/70 hover:border-slate-300/40;
+}
