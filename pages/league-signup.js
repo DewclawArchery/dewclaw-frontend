@@ -1,289 +1,289 @@
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
+/**
+ * League Signup Page – Option A (Always succeed)
+ */
 export default function LeagueSignup() {
-  const router = useRouter();
-
   const [leagues, setLeagues] = useState([]);
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
+  const [loading, setLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState(null);
-  const [loadingLeagues, setLoadingLeagues] = useState(true);
 
   const [form, setForm] = useState({
-    first_name: "",
-    last_name: "",
+    firstName: "",
+    lastName: "",
     phone: "",
     email: "",
     notes: "",
   });
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
-  const [submitting, setSubmitting] = useState(false);
+  // Helper: update form fields
+  const handleChange = (e) =>
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const showMessage = (msg, type = "info") => {
+  // Helper: UI message
+  const showMsg = (msg, type = "info") => {
     setMessage(msg);
     setMessageType(type);
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // -------------------------------------------------------------
-  // LOAD LEAGUES
-  // -------------------------------------------------------------
+  // Load leagues from the plugin
   useEffect(() => {
     async function loadLeagues() {
       try {
-        const res = await fetch(
-          `${API_BASE}/wp-json/teri/v5/leagues`
-        );
-
+        const res = await fetch(`${API_BASE}/wp-json/teri/v5/leagues`);
         const data = await res.json();
-        console.log("Loaded leagues:", data);
 
         if (!Array.isArray(data)) {
           throw new Error("Bad league format");
         }
 
+        // Only show ACTIVE leagues with OPEN slots
         const active = data.filter(
-          (l) =>
-            String(l.active) === "1" &&
-            Number(l.slots_available) > 0
+          (l) => String(l.active) === "1" && Number(l.slots_available) > 0
         );
 
         setLeagues(active);
       } catch (err) {
         console.error("Failed to load leagues:", err);
-        showMessage("Unable to load leagues. Please try again later.", "error");
-      } finally {
-        setLoadingLeagues(false);
+        showMsg("Unable to load leagues at this time.", "error");
       }
     }
 
     loadLeagues();
   }, []);
 
-  // -------------------------------------------------------------
-  // SUBMIT SIGNUP
-  // -------------------------------------------------------------
+  // Submit signup handler
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!selectedLeague) {
-      showMessage("Please select a league.", "error");
+      showMsg("Please select a league first.", "error");
       return;
     }
 
-    setSubmitting(true);
-    showMessage("");
+    setLoading(true);
+    showMsg("");
 
     try {
-      const res = await fetch(
-        `${API_BASE}/wp-json/teri/v5/league/signup`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            league_id: selectedLeague,
-            first_name: form.first_name,
-            last_name: form.last_name,
-            phone: form.phone,
-            email: form.email,
-            notes: form.notes,
-          }),
-        }
-      );
+      const payload = {
+        league_id: selectedLeague,
+        first_name: form.firstName,
+        last_name: form.lastName,
+        phone: form.phone,
+        email: form.email,
+        notes: form.notes,
+      };
 
-      const data = await res.json();
-      console.log("Signup response:", data);
+      const res = await fetch(`${API_BASE}/wp-json/teri/v5/league/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      // ❌ FAIL LOGIC
-      if (!res.ok || !data.success) {
-        showMessage("Signup failed. Please try again.", "error");
+      const out = await res.json();
+      console.log("Signup response:", out);
+
+      if (!out.success) {
+        showMsg("Signup failed. Please try again.", "error");
+        setLoading(false);
         return;
       }
 
-      // 🎉 SUCCESS LOGIC
-      showMessage("Signup successful!", "success");
+      // SUCCESS — always in Option A
+      showMsg("Signup successful! You're all set.", "success");
 
-      // If Square URL exists → redirect to payment
-      if (data.redirect_url) {
-        window.location.href = data.redirect_url;
-        return;
+      // Optional: redirect if Square gave us a link
+      if (out.redirect_url && out.redirect_url.length > 5) {
+        setTimeout(() => {
+          window.location.href = out.redirect_url;
+        }, 600);
       }
-
-      // Otherwise → go to thank-you page
-      router.push("/thank-you");
-
     } catch (err) {
       console.error("Signup error:", err);
-      showMessage("Signup failed. Please try again.", "error");
-    } finally {
-      setSubmitting(false);
+      showMsg("Signup failed. Please try again.", "error");
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="page-shell">
-      <div className="max-w-5xl mx-auto py-20 text-slate-100">
-        <h1 className="text-4xl font-bold mb-8 text-center text-[var(--dew-gold)]">
-          League Signup
-        </h1>
+      <section className="max-w-6xl mx-auto py-16 px-4 md:px-6 lg:px-8">
+        <header className="mb-12 text-center">
+          <h1 className="text-4xl font-bold text-dew-gold mb-4">
+            League Signup
+          </h1>
+          <p className="text-slate-200 max-w-2xl mx-auto">
+            Choose your league night and complete your info. Payment is handled
+            through Square. Your spot is confirmed automatically.
+          </p>
+        </header>
 
-        <p className="text-center mb-12 text-slate-300">
-          Choose your league night and complete your info.  
-          Payment is handled through Square.  
-          Your spot is confirmed automatically.
-        </p>
-
-        {/* Message Banner */}
-        {message && (
-          <div
-            className={`mb-8 p-4 text-center rounded-lg ${
-              messageType === "error"
-                ? "bg-red-800/70 text-red-200"
-                : "bg-green-800/70 text-green-200"
-            }`}
-          >
-            {message}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* -------------------------------------------------------------
-              LEFT SIDE — Leagues List
-            ------------------------------------------------------------- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+          {/* LEFT COLUMN — LEAGUE LIST */}
           <div>
-            <h2 className="text-2xl font-semibold mb-4 text-[var(--dew-gold)]">
+            <h2 className="text-2xl font-semibold text-dew-gold mb-4">
               Available Leagues
             </h2>
 
-            {loadingLeagues && (
+            {leagues.length === 0 && (
               <p className="text-slate-400">Loading leagues…</p>
             )}
 
-            {!loadingLeagues && leagues.length === 0 && (
-              <p className="text-slate-400">No leagues available at the moment.</p>
-            )}
-
-            {leagues.map((l) => (
-              <div
-                key={l.id}
-                className={`p-5 mb-4 rounded-xl cursor-pointer border shadow-md shadow-black/40 transition ${
-                  selectedLeague === l.id
-                    ? "border-[var(--dew-gold)] bg-slate-900/60"
-                    : "border-slate-600/40 bg-slate-900/30 hover:bg-slate-900/50"
-                }`}
-                onClick={() => setSelectedLeague(l.id)}
-              >
-                <div className="flex items-center gap-3 mb-1">
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      selectedLeague === l.id ? "bg-[var(--dew-gold)]" : "bg-slate-500"
-                    }`}
-                  ></div>
-                  <h3 className="text-xl font-semibold">{l.name}</h3>
-                </div>
-
-                <p className="text-slate-300">{l.day} @ {l.time}</p>
-                <p className="text-slate-400 text-sm mt-1">
-                  {l.slots_available} open slots
-                </p>
-              </div>
-            ))}
+            <div className="space-y-4">
+              {leagues.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => setSelectedLeague(l.id)}
+                  className={`w-full text-left p-4 rounded-xl border transition-all ${
+                    selectedLeague === l.id
+                      ? "border-dew-gold bg-black/40"
+                      : "border-slate-700/50 bg-black/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-semibold text-slate-100">
+                        {l.name}
+                      </p>
+                      <p className="text-slate-400">
+                        {l.day} @ {l.time}
+                      </p>
+                    </div>
+                    <p className="text-slate-300 text-sm">
+                      {l.slots_available} open slots
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* -------------------------------------------------------------
-              RIGHT SIDE — Signup Form
-            ------------------------------------------------------------- */}
-          <div>
-            <h2 className="text-2xl font-semibold mb-4 text-[var(--dew-gold)]">
+          {/* RIGHT COLUMN — SIGNUP FORM */}
+          <div className="content-panel">
+            <h2 className="text-2xl font-semibold text-dew-gold mb-4">
               Your Information
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {message && (
+              <div
+                className={`p-3 mb-4 rounded-lg ${
+                  messageType === "error"
+                    ? "bg-red-900/70 text-red-300"
+                    : "bg-green-900/50 text-green-300"
+                }`}
+              >
+                {message}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block mb-1 text-sm text-slate-300">
+                  <label className="block text-sm text-slate-200 mb-1">
                     First Name
                   </label>
                   <input
-                    type="text"
-                    name="first_name"
-                    value={form.first_name}
+                    name="firstName"
+                    value={form.firstName}
                     onChange={handleChange}
+                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
                     required
-                    className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm text-slate-300">
+                  <label className="block text-sm text-slate-200 mb-1">
                     Last Name
                   </label>
                   <input
-                    type="text"
-                    name="last_name"
-                    value={form.last_name}
+                    name="lastName"
+                    value={form.lastName}
                     onChange={handleChange}
+                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
                     required
-                    className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-200 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-200 mb-1">
+                    Email
+                  </label>
+                  <input
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    type="email"
+                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
+                    required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block mb-1 text-sm text-slate-300">Phone</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 text-sm text-slate-300">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 text-sm text-slate-300">
+                <label className="block text-sm text-slate-200 mb-1">
                   Notes (optional)
                 </label>
                 <textarea
                   name="notes"
+                  rows="4"
                   value={form.notes}
                   onChange={handleChange}
-                  rows="4"
-                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                  className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary w-full py-3 text-lg font-semibold"
-              >
-                {submitting ? "Submitting…" : "Submit Signup"}
-              </button>
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  className="btn-primary disabled:opacity-60"
+                  disabled={loading}
+                >
+                  {loading ? "Submitting…" : "Submit Signup"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
-      </div>
+
+        {/* FOOTER INFO SECTION */}
+        <div className="mt-16 max-w-3xl mx-auto text-center space-y-6">
+          <h2 className="text-2xl font-semibold text-dew-gold">
+            How League Signup Works
+          </h2>
+          <p className="text-slate-200">
+            1. Select your preferred league day/time.
+          </p>
+          <p className="text-slate-200">
+            2. Enter your information and complete the Square checkout.
+          </p>
+          <p className="text-slate-200">
+            3. Once payment clears, your spot is automatically confirmed.
+          </p>
+          <p className="text-slate-400 text-sm">
+            Signing up multiple shooters? Be sure your day/time has enough open
+            slots.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }
