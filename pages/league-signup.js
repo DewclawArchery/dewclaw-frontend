@@ -1,42 +1,36 @@
-import { useEffect, useState } from "react";
-import Head from "next/head";
+import { useState, useEffect } from "react";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_TERI_API_BASE || "https://dewclawarchery.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
 export default function LeagueSignup() {
   const [leagues, setLeagues] = useState([]);
-  const [loadingLeagues, setLoadingLeagues] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [selectedLeague, setSelectedLeague] = useState(null);
 
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    leagueId: "",
-    notes: "",
-  });
-
-  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("info");
 
-  const showError = (msg) => {
-    setMessage(msg);
-    setMessageType("error");
-  };
+  const [form, setForm] = useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+    email: "",
+    notes: "",
+  });
 
-  const showInfo = (msg) => {
-    setMessage(msg);
-    setMessageType("info");
-  };
-
+  // Handle form field changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Load leagues from T.E.R.I.
+  // Show message banner
+  const showInfo = (msg, type = "info") => {
+    setMessage(msg);
+    setMessageType(type);
+  };
+
+  // Load leagues from WordPress
   useEffect(() => {
     async function loadLeagues() {
       try {
@@ -47,18 +41,18 @@ export default function LeagueSignup() {
           throw new Error("Bad league format");
         }
 
-        // Only show ACTIVE leagues with OPEN slots
-        const activeLeagues = data.filter(
+        // Only show active leagues with available slots
+        const active = data.filter(
           (l) =>
-            String(l.active) === "1" &&
-            Number(l.slots_available) > 0
+            String(l.active) === "1" && Number(l.slots_available) > 0
         );
 
-        setLeagues(activeLeagues);
+        setLeagues(active);
       } catch (err) {
         console.error("Failed to load leagues:", err);
+        showInfo("Unable to load leagues.", "error");
       } finally {
-        setLoadingLeagues(false);
+        setLoading(false);
       }
     }
 
@@ -66,261 +60,179 @@ export default function LeagueSignup() {
   }, []);
 
   // Submit signup
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setMessage("");
 
-    const { firstName, lastName, email, phone, leagueId, notes } = form;
-
-    if (!firstName.trim() || !lastName.trim()) {
-      return showError("Please enter your first and last name.");
+    if (!selectedLeague) {
+      showInfo("Please select a league.", "error");
+      return;
     }
-    if (!email.includes("@")) {
-      return showError("Please enter a valid email address.");
-    }
-    if (!phone.trim() || phone.length < 7) {
-      return showError("Please enter a valid phone number.");
-    }
-    if (!leagueId) {
-      return showError("Please select a league.");
-    }
-
-    const payload = {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      league_id: leagueId,
-      notes: notes.trim(),
-    };
 
     try {
-      setSubmitting(true);
-      showInfo("Submitting signup…");
+      const payload = {
+        league_id: selectedLeague,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone: form.phone,
+        email: form.email,
+        notes: form.notes,
+      };
 
-      const res = await fetch(`${API_BASE}/wp-json/teri/v5/league/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `${API_BASE}/wp-json/teri/v5/league/signup`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
 
-      if (!res.ok || !data.success || !data.checkout_url) {
-        return showError(
-          data?.message || "Signup failed. Please try again."
-        );
+      if (!data.success) {
+        console.error("Signup failed:", data);
+        showInfo("Signup failed. Please try again.", "error");
+        return;
       }
 
-      // redirect to Square
-      window.location.href = data.checkout_url;
+      // If Square returned a checkout URL, redirect
+      if (data.redirect_url) {
+        window.location.href = data.redirect_url;
+        return;
+      }
+
+      // Otherwise, show success message
+      showInfo("Signup successful!", "success");
+
     } catch (err) {
-      console.error(err);
-      return showError("Unexpected error. Please try again.");
-    } finally {
-      setSubmitting(false);
+      console.error("Signup error:", err);
+      showInfo("Signup failed. Please try again.", "error");
     }
-  };
+  }
 
   return (
-    <>
-      <Head>
-        <title>League Signup | Dewclaw Archery</title>
-        <meta
-          name="description"
-          content="Sign up for Dewclaw Archery leagues. Choose your league night and secure your spot with Square."
-        />
-      </Head>
+    <div className="page-shell">
+      <div className="max-w-5xl mx-auto py-16">
+        <h1 className="text-center text-4xl font-bold text-amber-400 mb-10">
+          League Signup
+        </h1>
 
-      <section className="max-w-6xl mx-auto py-16 px-4 md:px-6 lg:px-8">
-        {/* Page Header */}
-        <header className="mb-12 text-center">
-          <h1 className="text-4xl font-bold text-dew-gold mb-4">
-            League Signup
-          </h1>
-          <p className="text-slate-200 max-w-2xl mx-auto">
-            Choose your league night and complete your info. Payment is handled
-            through Square. Your spot is confirmed automatically.
-          </p>
-        </header>
+        {/* Message Box */}
+        {message && (
+          <div
+            className={`p-4 rounded-lg mb-6 ${
+              messageType === "error"
+                ? "bg-red-800/40 text-red-300"
+                : messageType === "success"
+                ? "bg-green-800/40 text-green-300"
+                : "bg-slate-700/40 text-slate-200"
+            }`}
+          >
+            {message}
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          {/* Left: Available Leagues */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Left: League Selection */}
           <div>
-            <h2 className="text-2xl font-semibold text-dew-gold mb-4">
+            <h2 className="text-2xl font-semibold mb-4 text-amber-400">
               Available Leagues
             </h2>
 
-            {loadingLeagues ? (
-              <p className="text-slate-400">Loading leagues…</p>
+            {loading ? (
+              <p className="text-slate-300">Loading leagues…</p>
             ) : leagues.length === 0 ? (
-              <p className="text-slate-400">
-                No active leagues with open slots right now.
-              </p>
+              <p className="text-slate-300">No open leagues at this time.</p>
             ) : (
-              <ul className="space-y-4">
-                {leagues.map((league) => (
-                  <li
-                    key={league.id}
-                    className="p-4 rounded-lg bg-slate-900/60 border border-slate-700/40"
+              <div className="space-y-4">
+                {leagues.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => setSelectedLeague(l.id)}
+                    className={`w-full text-left p-5 rounded-xl border ${
+                      selectedLeague === l.id
+                        ? "border-amber-400 bg-amber-400/20"
+                        : "border-slate-500/40 bg-slate-700/20"
+                    } hover:border-amber-300 transition`}
                   >
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="leagueId"
-                        value={league.id}
-                        checked={form.leagueId == league.id}
-                        onChange={handleChange}
-                        className="mt-1 h-4 w-4 text-dew-gold focus:ring-dew-gold"
-                      />
-
-                      <div>
-                        <p className="text-lg font-semibold text-dew-gold">
-                          {league.name}
-                        </p>
-                        <p className="text-slate-200">
-                          {league.day} @ {league.time}
-                        </p>
-                        <p className="text-slate-400 text-sm mt-1">
-                          {league.slots_available} open slots
-                        </p>
-                      </div>
-                    </label>
-                  </li>
+                    <div className="font-semibold text-xl text-slate-100">
+                      {l.name}
+                    </div>
+                    <div className="text-slate-300">
+                      {l.day} @ {l.time}
+                    </div>
+                    <div className="text-slate-400 text-sm">
+                      {l.slots_available} open slots
+                    </div>
+                  </button>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
 
           {/* Right: Signup Form */}
-          <div className="content-panel">
-            <h2 className="text-2xl font-semibold text-dew-gold mb-4">
+          <div>
+            <h2 className="text-2xl font-semibold mb-4 text-amber-400">
               Your Information
             </h2>
 
-            {message && (
-              <div
-                className={`mb-4 rounded-md px-4 py-3 text-sm ${
-                  messageType === "error"
-                    ? "bg-red-900/50 text-red-100 border border-red-500/40"
-                    : "bg-slate-900/60 text-slate-100 border border-slate-500/40"
-                }`}
-              >
-                {message}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Name */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={form.firstName}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-dew-gold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={form.lastName}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-dew-gold"
-                  />
-                </div>
-              </div>
-
-              {/* Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Phone
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-dew-gold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-dew-gold"
-                  />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Notes (optional)
-                </label>
-                <textarea
-                  name="notes"
-                  value={form.notes}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input
+                  name="first_name"
+                  placeholder="First Name"
+                  value={form.first_name}
                   onChange={handleChange}
-                  rows={4}
-                  className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-dew-gold"
+                  required
+                  className="form-input"
+                />
+                <input
+                  name="last_name"
+                  placeholder="Last Name"
+                  value={form.last_name}
+                  onChange={handleChange}
+                  required
+                  className="form-input"
                 />
               </div>
 
-              {/* Submit */}
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Submitting…" : "Submit Signup"}
-                </button>
-              </div>
+              <input
+                name="phone"
+                placeholder="Phone"
+                value={form.phone}
+                onChange={handleChange}
+                required
+                className="form-input"
+              />
+
+              <input
+                type="email"
+                name="email"
+                placeholder="Email"
+                value={form.email}
+                onChange={handleChange}
+                required
+                className="form-input"
+              />
+
+              <textarea
+                name="notes"
+                placeholder="Notes (optional)"
+                value={form.notes}
+                onChange={handleChange}
+                className="form-input min-h-[120px]"
+              />
+
+              <button
+                type="submit"
+                className="btn-primary w-full mt-4"
+              >
+                Submit Signup
+              </button>
             </form>
           </div>
         </div>
-
-        {/* How It Works */}
-        <div className="mt-16 max-w-3xl mx-auto text-center space-y-6">
-          <h2 className="text-2xl font-semibold text-dew-gold">
-            How League Signup Works
-          </h2>
-
-          <p className="text-slate-200">
-            1. Select your preferred league day/time.
-          </p>
-          <p className="text-slate-200">
-            2. Enter your information and complete the Square checkout.
-          </p>
-          <p className="text-slate-200">
-            3. Once payment clears, your slot is automatically confirmed.
-          </p>
-
-          <p className="text-slate-400 text-sm mt-4">
-            Signing up multiple shooters? Be sure your chosen day/time has
-            enough open slots so your group can shoot together.
-          </p>
-        </div>
-      </section>
-    </>
+      </div>
+    </div>
   );
 }
