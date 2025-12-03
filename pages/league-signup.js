@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
 export default function LeagueSignup() {
-  const [leagues, setLeagues] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedLeague, setSelectedLeague] = useState(null);
+  const router = useRouter();
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
+  const [leagues, setLeagues] = useState([]);
+  const [selectedLeague, setSelectedLeague] = useState(null);
+  const [loadingLeagues, setLoadingLeagues] = useState(true);
 
   const [form, setForm] = useState({
     first_name: "",
@@ -18,114 +18,135 @@ export default function LeagueSignup() {
     notes: "",
   });
 
-  // Handle form field changes
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
+  const [submitting, setSubmitting] = useState(false);
+
+  const showMessage = (msg, type = "info") => {
+    setMessage(msg);
+    setMessageType(type);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Show message banner
-  const showInfo = (msg, type = "info") => {
-    setMessage(msg);
-    setMessageType(type);
-  };
-
-  // Load leagues from WordPress
+  // -------------------------------------------------------------
+  // LOAD LEAGUES
+  // -------------------------------------------------------------
   useEffect(() => {
     async function loadLeagues() {
       try {
-        const res = await fetch(`${API_BASE}/wp-json/teri/v5/leagues`);
+        const res = await fetch(
+          `${API_BASE}/wp-json/teri/v5/leagues`
+        );
+
         const data = await res.json();
+        console.log("Loaded leagues:", data);
 
         if (!Array.isArray(data)) {
           throw new Error("Bad league format");
         }
 
-        // Only show active leagues with available slots
         const active = data.filter(
           (l) =>
-            String(l.active) === "1" && Number(l.slots_available) > 0
+            String(l.active) === "1" &&
+            Number(l.slots_available) > 0
         );
 
         setLeagues(active);
       } catch (err) {
         console.error("Failed to load leagues:", err);
-        showInfo("Unable to load leagues.", "error");
+        showMessage("Unable to load leagues. Please try again later.", "error");
       } finally {
-        setLoading(false);
+        setLoadingLeagues(false);
       }
     }
 
     loadLeagues();
   }, []);
 
-  // Submit signup
-  async function handleSubmit(e) {
+  // -------------------------------------------------------------
+  // SUBMIT SIGNUP
+  // -------------------------------------------------------------
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!selectedLeague) {
-      showInfo("Please select a league.", "error");
+      showMessage("Please select a league.", "error");
       return;
     }
 
-    try {
-      const payload = {
-        league_id: selectedLeague,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        phone: form.phone,
-        email: form.email,
-        notes: form.notes,
-      };
+    setSubmitting(true);
+    showMessage("");
 
+    try {
       const res = await fetch(
         `${API_BASE}/wp-json/teri/v5/league/signup`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            league_id: selectedLeague,
+            first_name: form.first_name,
+            last_name: form.last_name,
+            phone: form.phone,
+            email: form.email,
+            notes: form.notes,
+          }),
         }
       );
 
       const data = await res.json();
+      console.log("Signup response:", data);
 
-      if (!data.success) {
-        console.error("Signup failed:", data);
-        showInfo("Signup failed. Please try again.", "error");
+      // ❌ FAIL LOGIC
+      if (!res.ok || !data.success) {
+        showMessage("Signup failed. Please try again.", "error");
         return;
       }
 
-      // If Square returned a checkout URL, redirect
+      // 🎉 SUCCESS LOGIC
+      showMessage("Signup successful!", "success");
+
+      // If Square URL exists → redirect to payment
       if (data.redirect_url) {
         window.location.href = data.redirect_url;
         return;
       }
 
-      // Otherwise, show success message
-      showInfo("Signup successful!", "success");
+      // Otherwise → go to thank-you page
+      router.push("/thank-you");
 
     } catch (err) {
       console.error("Signup error:", err);
-      showInfo("Signup failed. Please try again.", "error");
+      showMessage("Signup failed. Please try again.", "error");
+    } finally {
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="page-shell">
-      <div className="max-w-5xl mx-auto py-16">
-        <h1 className="text-center text-4xl font-bold text-amber-400 mb-10">
+      <div className="max-w-5xl mx-auto py-20 text-slate-100">
+        <h1 className="text-4xl font-bold mb-8 text-center text-[var(--dew-gold)]">
           League Signup
         </h1>
 
-        {/* Message Box */}
+        <p className="text-center mb-12 text-slate-300">
+          Choose your league night and complete your info.  
+          Payment is handled through Square.  
+          Your spot is confirmed automatically.
+        </p>
+
+        {/* Message Banner */}
         {message && (
           <div
-            className={`p-4 rounded-lg mb-6 ${
+            className={`mb-8 p-4 text-center rounded-lg ${
               messageType === "error"
-                ? "bg-red-800/40 text-red-300"
-                : messageType === "success"
-                ? "bg-green-800/40 text-green-300"
-                : "bg-slate-700/40 text-slate-200"
+                ? "bg-red-800/70 text-red-200"
+                : "bg-green-800/70 text-green-200"
             }`}
           >
             {message}
@@ -133,101 +154,131 @@ export default function LeagueSignup() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Left: League Selection */}
+          {/* -------------------------------------------------------------
+              LEFT SIDE — Leagues List
+            ------------------------------------------------------------- */}
           <div>
-            <h2 className="text-2xl font-semibold mb-4 text-amber-400">
+            <h2 className="text-2xl font-semibold mb-4 text-[var(--dew-gold)]">
               Available Leagues
             </h2>
 
-            {loading ? (
-              <p className="text-slate-300">Loading leagues…</p>
-            ) : leagues.length === 0 ? (
-              <p className="text-slate-300">No open leagues at this time.</p>
-            ) : (
-              <div className="space-y-4">
-                {leagues.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => setSelectedLeague(l.id)}
-                    className={`w-full text-left p-5 rounded-xl border ${
-                      selectedLeague === l.id
-                        ? "border-amber-400 bg-amber-400/20"
-                        : "border-slate-500/40 bg-slate-700/20"
-                    } hover:border-amber-300 transition`}
-                  >
-                    <div className="font-semibold text-xl text-slate-100">
-                      {l.name}
-                    </div>
-                    <div className="text-slate-300">
-                      {l.day} @ {l.time}
-                    </div>
-                    <div className="text-slate-400 text-sm">
-                      {l.slots_available} open slots
-                    </div>
-                  </button>
-                ))}
-              </div>
+            {loadingLeagues && (
+              <p className="text-slate-400">Loading leagues…</p>
             )}
+
+            {!loadingLeagues && leagues.length === 0 && (
+              <p className="text-slate-400">No leagues available at the moment.</p>
+            )}
+
+            {leagues.map((l) => (
+              <div
+                key={l.id}
+                className={`p-5 mb-4 rounded-xl cursor-pointer border shadow-md shadow-black/40 transition ${
+                  selectedLeague === l.id
+                    ? "border-[var(--dew-gold)] bg-slate-900/60"
+                    : "border-slate-600/40 bg-slate-900/30 hover:bg-slate-900/50"
+                }`}
+                onClick={() => setSelectedLeague(l.id)}
+              >
+                <div className="flex items-center gap-3 mb-1">
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      selectedLeague === l.id ? "bg-[var(--dew-gold)]" : "bg-slate-500"
+                    }`}
+                  ></div>
+                  <h3 className="text-xl font-semibold">{l.name}</h3>
+                </div>
+
+                <p className="text-slate-300">{l.day} @ {l.time}</p>
+                <p className="text-slate-400 text-sm mt-1">
+                  {l.slots_available} open slots
+                </p>
+              </div>
+            ))}
           </div>
 
-          {/* Right: Signup Form */}
+          {/* -------------------------------------------------------------
+              RIGHT SIDE — Signup Form
+            ------------------------------------------------------------- */}
           <div>
-            <h2 className="text-2xl font-semibold mb-4 text-amber-400">
+            <h2 className="text-2xl font-semibold mb-4 text-[var(--dew-gold)]">
               Your Information
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block mb-1 text-sm text-slate-300">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={form.first_name}
+                    onChange={handleChange}
+                    required
+                    className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm text-slate-300">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={form.last_name}
+                    onChange={handleChange}
+                    required
+                    className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1 text-sm text-slate-300">Phone</label>
                 <input
-                  name="first_name"
-                  placeholder="First Name"
-                  value={form.first_name}
+                  type="tel"
+                  name="phone"
+                  value={form.phone}
                   onChange={handleChange}
                   required
-                  className="form-input"
-                />
-                <input
-                  name="last_name"
-                  placeholder="Last Name"
-                  value={form.last_name}
-                  onChange={handleChange}
-                  required
-                  className="form-input"
+                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
                 />
               </div>
 
-              <input
-                name="phone"
-                placeholder="Phone"
-                value={form.phone}
-                onChange={handleChange}
-                required
-                className="form-input"
-              />
+              <div>
+                <label className="block mb-1 text-sm text-slate-300">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                />
+              </div>
 
-              <input
-                type="email"
-                name="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={handleChange}
-                required
-                className="form-input"
-              />
-
-              <textarea
-                name="notes"
-                placeholder="Notes (optional)"
-                value={form.notes}
-                onChange={handleChange}
-                className="form-input min-h-[120px]"
-              />
+              <div>
+                <label className="block mb-1 text-sm text-slate-300">
+                  Notes (optional)
+                </label>
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={handleChange}
+                  rows="4"
+                  className="w-full p-3 rounded bg-slate-900/60 border border-slate-700 text-slate-100"
+                />
+              </div>
 
               <button
                 type="submit"
-                className="btn-primary w-full mt-4"
+                disabled={submitting}
+                className="btn-primary w-full py-3 text-lg font-semibold"
               >
-                Submit Signup
+                {submitting ? "Submitting…" : "Submit Signup"}
               </button>
             </form>
           </div>
