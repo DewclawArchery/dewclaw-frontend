@@ -2,6 +2,10 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/wp-admin",
+      "destination": "https://dewclawarchery.wpengine.com/wp-admin"
+    },
+    {
       "source": "/wp-admin/:path*",
       "destination": "https://dewclawarchery.wpengine.com/wp-admin/:path*"
     },
