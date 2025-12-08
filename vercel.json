@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/wp-admin/:path*",
+      "destination": "https://dewclawarchery.wpengine.com/wp-admin/:path*"
+    },
+    {
+      "source": "/wp-login.php",
+      "destination": "https://dewclawarchery.wpengine.com/wp-login.php"
+    },
+    {
+      "source": "/wp-json/:path*",
+      "destination": "https://dewclawarchery.wpengine.com/wp-json/:path*"
+    },
+    {
+      "source": "/wp-content/:path*",
+      "destination": "https://dewclawarchery.wpengine.com/wp-content/:path*"
+    },
+    {
+      "source": "/wp-includes/:path*",
+      "destination": "https://dewclawarchery.wpengine.com/wp-includes/:path*"
+    }
+  ]
+}
