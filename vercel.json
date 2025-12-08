@@ -2,16 +2,12 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/wp-admin",
-      "destination": "https://dewclawarchery.wpengine.com/wp-admin"
+      "source": "/wp-login.php",
+      "destination": "https://dewclawarchery.wpengine.com/wp-login.php"
     },
     {
       "source": "/wp-admin/:path*",
       "destination": "https://dewclawarchery.wpengine.com/wp-admin/:path*"
-    },
-    {
-      "source": "/wp-login.php",
-      "destination": "https://dewclawarchery.wpengine.com/wp-login.php"
     },
     {
       "source": "/wp-json/:path*",
