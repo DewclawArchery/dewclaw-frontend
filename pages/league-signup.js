@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
 /**
- * League Signup Page – Option A (Always succeed)
+ * League Signup Page – UPDATED FOR V6 API
  */
 export default function LeagueSignup() {
   const [leagues, setLeagues] = useState([]);
@@ -30,21 +30,30 @@ export default function LeagueSignup() {
     setMessageType(type);
   };
 
-  // Load leagues from the plugin
+  // Load leagues from new V6 API
   useEffect(() => {
     async function loadLeagues() {
       try {
-        const res = await fetch(`${API_BASE}/wp-json/teri/v5/leagues`);
-        const data = await res.json();
+        const res = await fetch(`${API_BASE}/wp-json/teri/v6/leagues`);
+        const json = await res.json();
 
-        if (!Array.isArray(data)) {
-          throw new Error("Bad league format");
+        if (!json.success || !Array.isArray(json.data)) {
+          throw new Error("Unexpected league format");
         }
 
-        // Only show ACTIVE leagues with OPEN slots
-        const active = data.filter(
-          (l) => String(l.active) === "1" && Number(l.slots_available) > 0
-        );
+        const list = json.data;
+
+        // Map DB fields → Frontend expected fields
+        const mapped = list.map((l) => ({
+          id: l.id,
+          name: l.name,
+          day: l.day_of_week,
+          time: l.start_time?.slice(0, 5) ?? "",
+          slots_available: l.max_slots ?? 0, // DB does not have dynamic slot calc yet
+          active: l.active,
+        }));
+
+        const active = mapped.filter((l) => String(l.active) === "1");
 
         setLeagues(active);
       } catch (err) {
@@ -69,37 +78,39 @@ export default function LeagueSignup() {
 
     try {
       const payload = {
-        league_id: selectedLeague,
-        first_name: form.firstName,
-        last_name: form.lastName,
+        participant_name: `${form.firstName} ${form.lastName}`,
         phone: form.phone,
         email: form.email,
         notes: form.notes,
+        payment_mode: "online",
       };
 
-      const res = await fetch(`${API_BASE}/wp-json/teri/v5/league/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `${API_BASE}/wp-json/teri/v6/leagues/${selectedLeague}/signup`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
-      const out = await res.json();
-      console.log("Signup response:", out);
+      const json = await res.json();
+      console.log("Signup response:", json);
 
-      if (!out.success) {
-        showMsg("Signup failed. Please try again.", "error");
+      if (!json.success) {
+        showMsg(json.message || "Signup failed. Please try again.", "error");
         setLoading(false);
         return;
       }
 
-      // SUCCESS — always in Option A
-      showMsg("Signup successful! You're all set.", "success");
+      // SUCCESS
+      showMsg("Signup successful! Redirecting…", "success");
 
-      // Optional: redirect if Square gave us a link
-      if (out.redirect_url && out.redirect_url.length > 5) {
+      // Redirect if Square returned a link
+      if (json.data?.payment_url) {
         setTimeout(() => {
-          window.location.href = out.redirect_url;
-        }, 600);
+          window.location.href = json.data.payment_url;
+        }, 800);
       }
     } catch (err) {
       console.error("Signup error:", err);
