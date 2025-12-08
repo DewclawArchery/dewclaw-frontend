@@ -23,7 +23,7 @@ export default function ArrowOrders() {
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info"); // "info" | "error"
+  const [messageType, setMessageType] = useState("info"); // "info" | "error" | "success"
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,6 +38,11 @@ export default function ArrowOrders() {
   const showInfo = (msg) => {
     setMessage(msg);
     setMessageType("info");
+  };
+
+  const showSuccess = (msg) => {
+    setMessage(msg);
+    setMessageType("success");
   };
 
   const handleSubmit = async (e) => {
@@ -61,7 +66,7 @@ export default function ArrowOrders() {
       notes,
     } = form;
 
-    // Basic validation similar to plugin intent
+    // Basic validation similar to backend validator
     if (!firstName.trim() || !lastName.trim()) {
       return showError("Please enter your first and last name.");
     }
@@ -97,7 +102,6 @@ export default function ArrowOrders() {
       );
     }
 
-    // Build payload as backend expects
     const payload = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
@@ -120,17 +124,15 @@ export default function ArrowOrders() {
       setSubmitting(true);
       showInfo("Submitting your order…");
 
-      const res = await fetch(`${API_BASE}/wp-json/teri/v5/order/arrow`, {
+      const res = await fetch(`${API_BASE}/wp-json/teri/v6/arrow/orders`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok || !data.success || !data.redirect_url) {
+      if (!res.ok || !data.success) {
         console.error("Arrow order error:", data);
         return showError(
           data?.message ||
@@ -138,8 +140,27 @@ export default function ArrowOrders() {
         );
       }
 
-      // Success: redirect to Square deposit link
-      window.location.href = data.redirect_url;
+      showSuccess(
+        data.message ||
+          "Your arrow order has been received. We'll review the details and follow up if anything needs clarification."
+      );
+
+      // Optionally clear the form
+      setForm({
+        firstName: "",
+        lastName: "",
+        phone: "",
+        email: "",
+        arrowModel: "",
+        spine: "",
+        fletchingColors: "",
+        wrap: "no",
+        wrapColor: "",
+        cutLength: "",
+        quantity: "12",
+        verifyPrevious: "no",
+        notes: "",
+      });
     } catch (err) {
       console.error(err);
       showError(
@@ -156,7 +177,7 @@ export default function ArrowOrders() {
         <title>Custom Arrow Orders | Dewclaw Archery</title>
         <meta
           name="description"
-          content="Order fully custom arrows built around your bow, draw cycle, and goals. Submit your specs and lock in your build with a Square deposit."
+          content="Order fully custom arrows built around your bow, draw cycle, and goals. Submit your specs and our team will review your build and follow up with next steps."
         />
       </Head>
 
@@ -169,8 +190,8 @@ export default function ArrowOrders() {
           <p className="text-slate-200 max-w-2xl mx-auto">
             Custom arrows built around your bow, your draw cycle, and your
             goals. Tell us how you shoot and what you&apos;re preparing for, and
-            T.E.R.I. routes your build into our system. We&apos;ll review the
-            details and send a Square deposit link to lock in your build.
+            T.E.R.I. routes your build into our system so the range can review
+            and follow up with you.
           </p>
         </header>
 
@@ -191,13 +212,16 @@ export default function ArrowOrders() {
 
             <ul className="space-y-2 text-slate-200 text-sm">
               <li>• Quantity in multiples of 6 (6, 12, 18, …).</li>
-              <li>• You can request we verify a previous build if we&apos;ve built for you before.</li>
+              <li>
+                • You can request we verify a previous build if we&apos;ve built
+                for you before.
+              </li>
               <li>• We&apos;ll contact you if anything needs clarification.</li>
             </ul>
 
             <p className="text-slate-400 text-sm">
-              This form starts the process; your spot is locked in once your
-              Square deposit is completed.
+              This form starts the process; the shop will follow up with pricing
+              and payment details.
             </p>
           </div>
 
@@ -212,6 +236,8 @@ export default function ArrowOrders() {
                 className={`mb-4 rounded-md px-4 py-3 text-sm ${
                   messageType === "error"
                     ? "bg-red-900/50 text-red-100 border border-red-500/40"
+                    : messageType === "success"
+                    ? "bg-emerald-900/40 text-emerald-100 border border-emerald-500/40"
                     : "bg-slate-900/60 text-slate-100 border border-slate-500/40"
                 }`}
               >
@@ -231,8 +257,8 @@ export default function ArrowOrders() {
                     name="firstName"
                     value={form.firstName}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    autoComplete="given-name"
+                    className="dew-input"
+                    required
                   />
                 </div>
                 <div>
@@ -244,8 +270,8 @@ export default function ArrowOrders() {
                     name="lastName"
                     value={form.lastName}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    autoComplete="family-name"
+                    className="dew-input"
+                    required
                   />
                 </div>
               </div>
@@ -260,8 +286,8 @@ export default function ArrowOrders() {
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    autoComplete="tel"
+                    className="dew-input"
+                    required
                   />
                 </div>
                 <div>
@@ -273,27 +299,29 @@ export default function ArrowOrders() {
                     name="email"
                     value={form.email}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    autoComplete="email"
+                    className="dew-input"
+                    required
                   />
                 </div>
               </div>
 
-              {/* Arrow core specs */}
+              {/* Arrow details */}
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">
+                  Arrow Model
+                </label>
+                <input
+                  type="text"
+                  name="arrowModel"
+                  value={form.arrowModel}
+                  onChange={handleChange}
+                  className="dew-input"
+                  placeholder="e.g. Axis 5mm, RIP TKO, Gold Tip Hunter Pro…"
+                  required
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Arrow Model
-                  </label>
-                  <input
-                    type="text"
-                    name="arrowModel"
-                    value={form.arrowModel}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    placeholder="e.g. Easton Axis 5mm"
-                  />
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-200 mb-1">
                     Spine
@@ -303,77 +331,10 @@ export default function ArrowOrders() {
                     name="spine"
                     value={form.spine}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    placeholder="e.g. 300, 340, 400"
+                    className="dew-input"
+                    placeholder="e.g. 250, 300, 340…"
+                    required
                   />
-                </div>
-              </div>
-
-              {/* Fletching / Wrap */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Fletching Colors
-                  </label>
-                  <input
-                    type="text"
-                    name="fletchingColors"
-                    value={form.fletchingColors}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    placeholder="e.g. 2 white, 1 green"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Wrap?
-                  </label>
-                  <select
-                    name="wrap"
-                    value={form.wrap}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                  >
-                    <option value="no">No wrap</option>
-                    <option value="yes">Yes, add a wrap</option>
-                  </select>
-                </div>
-              </div>
-
-              {form.wrap === "yes" && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Wrap Color / Notes
-                  </label>
-                  <input
-                    type="text"
-                    name="wrapColor"
-                    value={form.wrapColor}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    placeholder="e.g. solid white, orange with logo, etc."
-                  />
-                </div>
-              )}
-
-              {/* Cut length / quantity */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Cut Length (inches)
-                  </label>
-                  <input
-                    type="text"
-                    name="cutLength"
-                    value={form.cutLength}
-                    onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                    placeholder="e.g. 27.5&quot; from throat of nock"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    If you&apos;re unsure, describe how you measure or note
-                    &quot;same as previous&quot; and we&apos;ll verify.
-                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-200 mb-1">
@@ -382,16 +343,76 @@ export default function ArrowOrders() {
                   <input
                     type="number"
                     name="quantity"
-                    min="6"
-                    step="6"
                     value={form.quantity}
                     onChange={handleChange}
-                    className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
+                    className="dew-input"
+                    min={6}
+                    step={6}
+                    required
                   />
                 </div>
               </div>
 
-              {/* Verify previous build */}
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">
+                  Fletching Colors
+                </label>
+                <input
+                  type="text"
+                  name="fletchingColors"
+                  value={form.fletchingColors}
+                  onChange={handleChange}
+                  className="dew-input"
+                  placeholder="e.g. 2x white, 1x chartreuse"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-200 mb-1">
+                    Wrap
+                  </label>
+                  <select
+                    name="wrap"
+                    value={form.wrap}
+                    onChange={handleChange}
+                    className="dew-input"
+                    required
+                  >
+                    <option value="no">No wrap</option>
+                    <option value="yes">Yes, add wrap</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-200 mb-1">
+                    Wrap Color / Style
+                  </label>
+                  <input
+                    type="text"
+                    name="wrapColor"
+                    value={form.wrapColor}
+                    onChange={handleChange}
+                    className="dew-input"
+                    placeholder="If wrap is yes, describe color or style"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-200 mb-1">
+                  Cut Length (if known)
+                </label>
+                <input
+                  type="text"
+                  name="cutLength"
+                  value={form.cutLength}
+                  onChange={handleChange}
+                  className="dew-input"
+                  placeholder='e.g. "28.5&quot; carbon-to-carbon"'
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-200 mb-1">
                   Verify Previous Build?
@@ -400,43 +421,34 @@ export default function ArrowOrders() {
                   name="verifyPrevious"
                   value={form.verifyPrevious}
                   onChange={handleChange}
-                  className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
+                  className="dew-input"
+                  required
                 >
-                  <option value="no">No, this is a new build</option>
-                  <option value="yes">
-                    Yes, verify against a previous Dewclaw build
-                  </option>
+                  <option value="no">No, this is a new setup</option>
+                  <option value="yes">Yes, verify my previous build</option>
                 </select>
-                <p className="text-xs text-slate-400 mt-1">
-                  If you&apos;ve had arrows built here before, we can cross-check
-                  this order with your previous specs.
-                </p>
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Notes / How You Shoot
+                  Notes / Bow Details / Goals
                 </label>
                 <textarea
                   name="notes"
                   value={form.notes}
                   onChange={handleChange}
-                  rows={4}
-                  className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-dew-gold"
-                  placeholder="Tell us about your bow, draw weight, what you’re hunting or training for, and anything else that matters."
+                  className="dew-input min-h-[120px]"
+                  placeholder="Tell us about your bow, draw weight/length, what broadheads you shoot, and what you want this build to do."
                 />
               </div>
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Submitting…" : "Submit Arrow Order"}
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="dew-button w-full sm:w-auto"
+                disabled={submitting}
+              >
+                {submitting ? "Submitting…" : "Submit Arrow Order"}
+              </button>
             </form>
           </div>
         </div>

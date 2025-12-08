@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 /**
- * League Signup Page – UPDATED FOR V6 API
+ * League Signup Page – uses v6 API and real slot availability.
+ *
+ * - GET  /wp-json/teri/v6/leagues
+ * - GET  /wp-json/teri/v6/leagues/{id}/signups  (paid signups only)
+ * - POST /wp-json/teri/v6/leagues/{id}/signup
  */
 export default function LeagueSignup() {
   const [leagues, setLeagues] = useState([]);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
+  const [messageType, setMessageType] = useState("info"); // "info" | "error" | "success"
   const [loading, setLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState(null);
 
@@ -20,42 +24,73 @@ export default function LeagueSignup() {
     notes: "",
   });
 
-  // Helper: update form fields
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  // Helper: UI message
   const showMsg = (msg, type = "info") => {
     setMessage(msg);
     setMessageType(type);
   };
 
-  // Load leagues from new V6 API
+  // Load leagues + paid signup counts
   useEffect(() => {
     async function loadLeagues() {
       try {
-        const res = await fetch(`${API_BASE}/wp-json/teri/v6/leagues`);
+        const res = await fetch(`${API_BASE}/wp-json/teri/v6/leagues`, {
+          method: "GET",
+        });
+
+        if (!res.ok) {
+          throw new Error(`Leagues HTTP ${res.status}`);
+        }
+
         const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data)) {
-          throw new Error("Unexpected league format");
+          throw new Error("Bad league payload");
         }
 
-        const list = json.data;
+        const baseLeagues = json.data;
 
-        // Map DB fields → Frontend expected fields
-        const mapped = list.map((l) => ({
-          id: l.id,
-          name: l.name,
-          day: l.day_of_week,
-          time: l.start_time?.slice(0, 5) ?? "",
-          slots_available: l.max_slots ?? 0, // DB does not have dynamic slot calc yet
-          active: l.active,
-        }));
+        // For each league, fetch PAID signups and compute available slots
+        const withSlots = await Promise.all(
+          baseLeagues.map(async (league) => {
+            let paidCount = 0;
 
-        const active = mapped.filter((l) => String(l.active) === "1");
+            try {
+              const res2 = await fetch(
+                `${API_BASE}/wp-json/teri/v6/leagues/${league.id}/signups`,
+                { method: "GET" }
+              );
 
-        setLeagues(active);
+              if (res2.ok) {
+                const json2 = await res2.json();
+                if (json2.success && Array.isArray(json2.data)) {
+                  paidCount = json2.data.length;
+                }
+              }
+            } catch (err) {
+              console.error("Failed to load signups for league", league.id, err);
+            }
+
+            const maxSlots = Number(league.max_slots ?? 0);
+            const slotsAvailable = Math.max(0, maxSlots - paidCount);
+
+            return {
+              ...league,
+              slots_available: slotsAvailable,
+            };
+          })
+        );
+
+        const active = withSlots.filter(
+          (l) =>
+            String(l.active) === "1" || l.active === true || l.active === 1
+        );
+
+        const open = active.filter((l) => Number(l.slots_available) > 0);
+
+        setLeagues(open);
       } catch (err) {
         console.error("Failed to load leagues:", err);
         showMsg("Unable to load leagues at this time.", "error");
@@ -65,11 +100,24 @@ export default function LeagueSignup() {
     loadLeagues();
   }, []);
 
-  // Submit signup handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedLeague) {
       showMsg("Please select a league first.", "error");
+      return;
+    }
+
+    // Basic frontend validation to match backend expectations
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      showMsg("Please enter your first and last name.", "error");
+      return;
+    }
+    if (!form.email.trim() || !form.email.includes("@")) {
+      showMsg("Please enter a valid email address.", "error");
+      return;
+    }
+    if (!form.phone.trim() || form.phone.trim().length < 7) {
+      showMsg("Please enter a valid phone number.", "error");
       return;
     }
 
@@ -78,10 +126,10 @@ export default function LeagueSignup() {
 
     try {
       const payload = {
-        participant_name: `${form.firstName} ${form.lastName}`,
-        phone: form.phone,
-        email: form.email,
-        notes: form.notes,
+        participant_name: `${form.firstName} ${form.lastName}`.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        notes: form.notes.trim(),
         payment_mode: "online",
       };
 
@@ -94,23 +142,24 @@ export default function LeagueSignup() {
         }
       );
 
-      const json = await res.json();
-      console.log("Signup response:", json);
+      const out = await res.json();
+      console.log("Signup response:", out);
 
-      if (!json.success) {
-        showMsg(json.message || "Signup failed. Please try again.", "error");
+      if (!out.success) {
+        showMsg(
+          out.message || "Signup failed. Please check your info and try again.",
+          "error"
+        );
         setLoading(false);
         return;
       }
 
-      // SUCCESS
-      showMsg("Signup successful! Redirecting…", "success");
+      showMsg("Signup successful! You're all set.", "success");
 
-      // Redirect if Square returned a link
-      if (json.data?.payment_url) {
+      if (out.data && out.data.payment_link) {
         setTimeout(() => {
-          window.location.href = json.data.payment_url;
-        }, 800);
+          window.location.href = out.data.payment_link;
+        }, 700);
       }
     } catch (err) {
       console.error("Signup error:", err);
@@ -161,7 +210,7 @@ export default function LeagueSignup() {
                         {l.name}
                       </p>
                       <p className="text-slate-400">
-                        {l.day} @ {l.time}
+                        {l.day_of_week} @ {l.start_time}
                       </p>
                     </div>
                     <p className="text-slate-300 text-sm">
@@ -184,7 +233,9 @@ export default function LeagueSignup() {
                 className={`p-3 mb-4 rounded-lg ${
                   messageType === "error"
                     ? "bg-red-900/70 text-red-300"
-                    : "bg-green-900/50 text-green-300"
+                    : messageType === "success"
+                    ? "bg-green-900/50 text-green-300"
+                    : "bg-slate-800/70 text-slate-200"
                 }`}
               >
                 {message}
@@ -255,7 +306,7 @@ export default function LeagueSignup() {
                 </label>
                 <textarea
                   name="notes"
-                  rows="4"
+                  rows={4}
                   value={form.notes}
                   onChange={handleChange}
                   className="w-full rounded-md bg-slate-900/80 border border-slate-600/60 px-3 py-2 text-sm"
@@ -275,7 +326,6 @@ export default function LeagueSignup() {
           </div>
         </div>
 
-        {/* FOOTER INFO SECTION */}
         <div className="mt-16 max-w-3xl mx-auto text-center space-y-6">
           <h2 className="text-2xl font-semibold text-dew-gold">
             How League Signup Works
