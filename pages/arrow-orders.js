@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Head from "next/head";
+import PricingTable from "../components/PricingTable";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_TERI_API_BASE || "https://dewclawarchery.com";
@@ -23,7 +24,43 @@ export default function ArrowOrders() {
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info"); // "info" | "error" | "success"
+  const [messageType, setMessageType] = useState("info");
+
+  // Pricing for live estimate
+  const [pricingMap, setPricingMap] = useState({});
+  const [pricingLoaded, setPricingLoaded] = useState(false);
+  const [pricingError, setPricingError] = useState("");
+
+  useEffect(() => {
+    async function loadPricing() {
+      try {
+        const res = await fetch(
+          `${API_BASE}/wp-json/teri/v6/pricing?category=arrows`
+        );
+        const json = await res.json();
+
+        if (!json.success) {
+          throw new Error(json.message || "Unable to load arrow pricing.");
+        }
+
+        const map = {};
+        (json.data || []).forEach((item) => {
+          if (item.code) {
+            map[item.code] = item;
+          }
+        });
+
+        setPricingMap(map);
+        setPricingLoaded(true);
+      } catch (err) {
+        console.error("Arrow pricing error:", err);
+        setPricingError(err.message);
+        setPricingLoaded(false);
+      }
+    }
+
+    loadPricing();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -66,40 +103,26 @@ export default function ArrowOrders() {
       notes,
     } = form;
 
-    // Basic validation similar to backend validator
     if (!firstName.trim() || !lastName.trim()) {
       return showError("Please enter your first and last name.");
     }
     if (!phone.trim() || phone.trim().length < 7) {
       return showError("Please enter a valid phone number.");
     }
-    if (!email.trim() || !email.includes("@")) {
+    if (!email.includes("@")) {
       return showError("Please enter a valid email address.");
     }
-    if (!arrowModel.trim()) {
-      return showError("Please enter an arrow model.");
-    }
-    if (!spine.trim()) {
-      return showError("Please enter a spine value.");
-    }
-    if (!fletchingColors.trim()) {
+    if (!arrowModel.trim()) return showError("Please enter an arrow model.");
+    if (!spine.trim()) return showError("Please enter arrow spine.");
+    if (!fletchingColors.trim())
       return showError("Please enter fletching colors.");
-    }
-    if (!wrap) {
-      return showError("Please select whether you want a wrap.");
-    }
 
     const qtyNum = parseInt(quantity, 10);
     if (isNaN(qtyNum) || qtyNum < 6) {
-      return showError("Quantity must be at least 6, in multiples of 6.");
+      return showError("Quantity must be at least 6.");
     }
     if (qtyNum % 6 !== 0) {
-      return showError("Quantity must be in multiples of 6 (6, 12, 18, …).");
-    }
-    if (!verifyPrevious) {
-      return showError(
-        "Please indicate if we should verify a previous build."
-      );
+      return showError("Quantity must be in multiples of 6.");
     }
 
     const payload = {
@@ -145,7 +168,6 @@ export default function ArrowOrders() {
           "Your arrow order has been received. We'll review the details and follow up if anything needs clarification."
       );
 
-      // Optionally clear the form
       setForm({
         firstName: "",
         lastName: "",
@@ -171,13 +193,50 @@ export default function ArrowOrders() {
     }
   };
 
+  // Live estimated price based on ARROW_BASE, WRAP_ADDON, FLETCHING_LABOR
+  const estimate = (() => {
+    const qtyNum = parseInt(form.quantity, 10);
+    if (!pricingLoaded || !qtyNum || isNaN(qtyNum)) return null;
+
+    const baseItem = pricingMap["ARROW_BASE"];
+    const wrapItem = pricingMap["WRAP_ADDON"];
+    const fletchItem = pricingMap["FLETCHING_LABOR"];
+
+    const base =
+      baseItem && baseItem.price
+        ? Number(baseItem.price) * qtyNum
+        : 0;
+    const wrap =
+      form.wrap === "yes" && wrapItem && wrapItem.price
+        ? Number(wrapItem.price) * qtyNum
+        : 0;
+    const fletch =
+      fletchItem && fletchItem.price
+        ? Number(fletchItem.price) * qtyNum
+        : 0;
+
+    const total = base + wrap + fletch;
+    if (total <= 0) return null;
+
+    return {
+      qtyNum,
+      base,
+      wrap,
+      fletch,
+      total,
+      baseItem,
+      wrapItem,
+      fletchItem,
+    };
+  })();
+
   return (
     <>
       <Head>
         <title>Custom Arrow Orders | Dewclaw Archery</title>
         <meta
           name="description"
-          content="Order fully custom arrows built around your bow, draw cycle, and goals. Submit your specs and our team will review your build and follow up with next steps."
+          content="Order custom arrows tailored to your bow, draw cycle, and goals. Built by Dewclaw Archery’s expert technicians."
         />
       </Head>
 
@@ -188,57 +247,123 @@ export default function ArrowOrders() {
             Custom Arrow Orders
           </h1>
           <p className="text-slate-200 max-w-2xl mx-auto">
-            Custom arrows built around your bow, your draw cycle, and your
-            goals. Tell us how you shoot and what you&apos;re preparing for, and
-            T.E.R.I. routes your build into our system so the range can review
-            and follow up with you.
+            Submit your arrow build details and our team will prepare a custom
+            spec, review your setup, and follow up with final pricing.
           </p>
         </header>
 
+        {/* Pricing Table */}
+        <PricingTable
+          category="arrows"
+          title="Arrow Component & Build Pricing"
+        />
+
+        {/* Live estimate panel (if pricing is configured) */}
+        <div className="mt-8 mb-10">
+          <h2 className="text-xl font-semibold text-dew-gold mb-2">
+            Estimated Build Price
+          </h2>
+
+          {!pricingLoaded && !pricingError && (
+            <p className="text-slate-300 text-sm">
+              Loading pricing data…
+            </p>
+          )}
+
+          {pricingError && (
+            <p className="text-red-400 text-sm">
+              {pricingError} Pricing estimate may not be available right now.
+            </p>
+          )}
+
+          {estimate && (
+            <div className="bg-slate-900/40 border border-slate-700 rounded-md p-4 text-sm text-slate-100">
+              <p className="mb-2">
+                Based on quantity: <strong>{estimate.qtyNum}</strong>
+              </p>
+              <ul className="space-y-1">
+                {estimate.baseItem && (
+                  <li>
+                    {estimate.baseItem.name || "Arrows"}: $
+                    {estimate.base.toFixed(2)}
+                  </li>
+                )}
+                {estimate.wrapItem && form.wrap === "yes" && (
+                  <li>
+                    {estimate.wrapItem.name || "Wraps"}: $
+                    {estimate.wrap.toFixed(2)}
+                  </li>
+                )}
+                {estimate.fletchItem && (
+                  <li>
+                    {estimate.fletchItem.name || "Fletching Labor"}: $
+                    {estimate.fletch.toFixed(2)}
+                  </li>
+                )}
+              </ul>
+              <hr className="my-2 border-slate-700" />
+              <p className="font-semibold">
+                Estimated Total: ${estimate.total.toFixed(2)}
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                This is an estimate based on your current selections and our
+                configured pricing. Final pricing will be confirmed by a
+                technician before any payment is processed.
+              </p>
+            </div>
+          )}
+
+          {!estimate && pricingLoaded && !pricingError && (
+            <p className="text-slate-300 text-sm">
+              Adjust your quantity and options above to see an estimated total.
+              If no pricing appears, make sure codes ARROW_BASE, WRAP_ADDON, and
+              FLETCHING_LABOR are configured in the T.E.R.I. Pricing admin.
+            </p>
+          )}
+        </div>
+
         {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          {/* Left: Info / helper copy */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start mt-8">
+          {/* Info Section */}
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold text-dew-gold">
-              How this works
+              How Custom Arrow Orders Work
             </h2>
-            <p className="text-slate-200 leading-relaxed">
-              Fill out the form with your bow and arrow details. The more you
-              can tell us about your setup and how you shoot, the better we can
-              match the build to what you&apos;re doing—whether that&apos;s
-              broadhead-tuned hunting arrows, durable practice arrows, or a
-              dedicated target setup.
+
+            <p className="text-slate-200">
+              Fill out the form with as much detail as possible. We use your bow
+              specs, shooting style, and preferences to design a proper build.
             </p>
 
-            <ul className="space-y-2 text-slate-200 text-sm">
-              <li>• Quantity in multiples of 6 (6, 12, 18, …).</li>
+            <ul className="text-slate-300 text-sm space-y-2">
+              <li>• Quantities must be multiples of 6 (6, 12, 18, …).</li>
               <li>
-                • You can request we verify a previous build if we&apos;ve built
-                for you before.
+                • If you've purchased arrows from us before, we can verify a
+                previous build.
               </li>
-              <li>• We&apos;ll contact you if anything needs clarification.</li>
+              <li>• Our techs will contact you with any clarifying questions.</li>
             </ul>
 
             <p className="text-slate-400 text-sm">
-              This form starts the process; the shop will follow up with pricing
-              and payment details.
+              Pricing is shown above. Payment is handled after we confirm your
+              build details.
             </p>
           </div>
 
-          {/* Right: Form */}
-          <div className="content-panel">
+          {/* Form Section */}
+          <div className="bg-slate-900/40 p-6 rounded-lg border border-slate-700">
             <h2 className="text-2xl font-semibold text-dew-gold mb-4">
-              Arrow Build Details
+              Arrow Build Form
             </h2>
 
             {message && (
               <div
-                className={`mb-4 rounded-md px-4 py-3 text-sm ${
+                className={`mb-4 px-4 py-3 rounded text-sm border ${
                   messageType === "error"
-                    ? "bg-red-900/50 text-red-100 border border-red-500/40"
+                    ? "bg-red-900/40 border-red-500 text-red-100"
                     : messageType === "success"
-                    ? "bg-emerald-900/40 text-emerald-100 border border-emerald-500/40"
-                    : "bg-slate-900/60 text-slate-100 border border-slate-500/40"
+                    ? "bg-emerald-900/40 border-emerald-600 text-emerald-100"
+                    : "bg-slate-800/40 border-slate-500 text-slate-100"
                 }`}
               >
                 {message}
@@ -246,208 +371,181 @@ export default function ArrowOrders() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Name / Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* First + Last Name */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    First Name
-                  </label>
+                  <label className="dew-label">First Name</label>
                   <input
+                    className="dew-input"
                     type="text"
                     name="firstName"
                     value={form.firstName}
                     onChange={handleChange}
-                    className="dew-input"
-                    required
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Last Name
-                  </label>
+                  <label className="dew-label">Last Name</label>
                   <input
+                    className="dew-input"
                     type="text"
                     name="lastName"
                     value={form.lastName}
                     onChange={handleChange}
-                    className="dew-input"
-                    required
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Phone + Email */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Phone
-                  </label>
+                  <label className="dew-label">Phone</label>
                   <input
-                    type="tel"
+                    className="dew-input"
+                    type="text"
                     name="phone"
                     value={form.phone}
                     onChange={handleChange}
-                    className="dew-input"
-                    required
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Email
-                  </label>
+                  <label className="dew-label">Email</label>
                   <input
+                    className="dew-input"
                     type="email"
                     name="email"
                     value={form.email}
                     onChange={handleChange}
-                    className="dew-input"
-                    required
                   />
                 </div>
               </div>
 
-              {/* Arrow details */}
+              {/* Arrow Model */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Arrow Model
-                </label>
+                <label className="dew-label">Arrow Model</label>
                 <input
+                  className="dew-input"
                   type="text"
                   name="arrowModel"
                   value={form.arrowModel}
                   onChange={handleChange}
-                  className="dew-input"
-                  placeholder="e.g. Axis 5mm, RIP TKO, Gold Tip Hunter Pro…"
-                  required
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Spine + Cut Length */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Spine
-                  </label>
+                  <label className="dew-label">Spine</label>
                   <input
+                    className="dew-input"
                     type="text"
                     name="spine"
                     value={form.spine}
                     onChange={handleChange}
-                    className="dew-input"
-                    placeholder="e.g. 250, 300, 340…"
-                    required
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Quantity (multiples of 6)
-                  </label>
+                  <label className="dew-label">Cut Length (optional)</label>
                   <input
-                    type="number"
-                    name="quantity"
-                    value={form.quantity}
-                    onChange={handleChange}
                     className="dew-input"
-                    min={6}
-                    step={6}
-                    required
+                    type="text"
+                    name="cutLength"
+                    value={form.cutLength}
+                    onChange={handleChange}
+                    placeholder="e.g. 28.25"
                   />
                 </div>
               </div>
 
+              {/* Fletching */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Fletching Colors
-                </label>
+                <label className="dew-label">Fletching Colors</label>
                 <input
+                  className="dew-input"
                   type="text"
                   name="fletchingColors"
                   value={form.fletchingColors}
                   onChange={handleChange}
-                  className="dew-input"
-                  placeholder="e.g. 2x white, 1x chartreuse"
-                  required
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Wrap Selection */}
+              <div>
+                <label className="dew-label">Wrap</label>
+                <select
+                  className="dew-input"
+                  name="wrap"
+                  value={form.wrap}
+                  onChange={handleChange}
+                >
+                  <option value="no">No Wrap</option>
+                  <option value="yes">With Wrap</option>
+                </select>
+              </div>
+
+              {form.wrap === "yes" && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Wrap
-                  </label>
-                  <select
-                    name="wrap"
-                    value={form.wrap}
-                    onChange={handleChange}
-                    className="dew-input"
-                    required
-                  >
-                    <option value="no">No wrap</option>
-                    <option value="yes">Yes, add wrap</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-1">
-                    Wrap Color / Style
-                  </label>
+                  <label className="dew-label">Wrap Color</label>
                   <input
+                    className="dew-input"
                     type="text"
                     name="wrapColor"
                     value={form.wrapColor}
                     onChange={handleChange}
-                    className="dew-input"
-                    placeholder="If wrap is yes, describe color or style"
                   />
                 </div>
-              </div>
+              )}
 
+              {/* Quantity */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Cut Length (if known)
-                </label>
-                <input
-                  type="text"
-                  name="cutLength"
-                  value={form.cutLength}
-                  onChange={handleChange}
-                  className="dew-input"
-                  placeholder='e.g. "28.5&quot; carbon-to-carbon"'
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Verify Previous Build?
-                </label>
+                <label className="dew-label">Quantity</label>
                 <select
-                  name="verifyPrevious"
-                  value={form.verifyPrevious}
-                  onChange={handleChange}
                   className="dew-input"
-                  required
+                  name="quantity"
+                  value={form.quantity}
+                  onChange={handleChange}
                 >
-                  <option value="no">No, this is a new setup</option>
-                  <option value="yes">Yes, verify my previous build</option>
+                  <option value="6">6</option>
+                  <option value="12">12</option>
+                  <option value="18">18</option>
+                  <option value="24">24</option>
                 </select>
               </div>
 
+              {/* Verify Previous */}
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-1">
-                  Notes / Bow Details / Goals
-                </label>
+                <label className="dew-label">Verify Previous Build?</label>
+                <select
+                  className="dew-input"
+                  name="verifyPrevious"
+                  value={form.verifyPrevious}
+                  onChange={handleChange}
+                >
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="dew-label">Additional Notes</label>
                 <textarea
+                  className="dew-input"
                   name="notes"
                   value={form.notes}
                   onChange={handleChange}
-                  className="dew-input min-h-[120px]"
-                  placeholder="Tell us about your bow, draw weight/length, what broadheads you shoot, and what you want this build to do."
-                />
+                  rows={4}
+                ></textarea>
               </div>
 
               <button
                 type="submit"
-                className="dew-button w-full sm:w-auto"
                 disabled={submitting}
+                className="dew-button w-full mt-6"
               >
-                {submitting ? "Submitting…" : "Submit Arrow Order"}
+                {submitting ? "Submitting…" : "Submit Order"}
               </button>
             </form>
           </div>

@@ -1,4 +1,5 @@
 import Head from "next/head";
+import PricingTable from "../components/PricingTable";
 
 export default function Services() {
   return (
@@ -23,8 +24,11 @@ export default function Services() {
           </p>
         </header>
 
+        {/* NEW — Dynamic Pricing Table */}
+        <PricingTable category="services" title="Service Pricing" />
+
         {/* 3-Column Responsive Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12 mt-16">
           {/* Tuning */}
           <div>
             <h2 className="text-xl font-semibold text-dew-gold mb-3">
