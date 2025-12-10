@@ -185,6 +185,7 @@ export default function LeagueSignup() {
               confirmed automatically.
               <br></br>
               Top Prize - 2025 Elite Exalt 35 
+              <br></br>
               Top Prize <strong>YOUTH</strong> - 2026 Elite Emerse
             </p>
           </header>
