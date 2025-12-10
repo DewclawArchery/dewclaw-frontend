@@ -182,6 +182,23 @@ export default function LeagueSignup() {
               confirmed automatically.
             </p>
           </header>
+{/* --- Acuity Scheduling Embed (Centered Under Header) --- */}
+<div className="max-w-3xl mx-auto mt-6 p-2">
+  <Script
+    src="https://embed.acuityscheduling.com/js/embed.js"
+    strategy="lazyOnload"
+  />
+
+  <iframe
+    src="https://app.acuityscheduling.com/schedule.php?owner=17569879&calendarID=3383478&ref=embedded_csp"
+    title="Schedule Appointment"
+    width="100%"
+    height="800"
+    frameBorder="0"
+    allow="payment"
+    className="rounded-lg border border-slate-700 shadow-lg shadow-black/40"
+  ></iframe>
+</div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-10 items-start">
             {/* Available Leagues */}
