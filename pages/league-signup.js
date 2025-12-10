@@ -41,6 +41,7 @@ export default function LeagueSignup() {
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
 
+  // Load active leagues
   useEffect(() => {
     let cancelled = false;
 
@@ -135,6 +136,7 @@ export default function LeagueSignup() {
             message = errJson.message;
           }
         } catch {}
+
         throw new Error(message);
       }
 
@@ -171,6 +173,7 @@ export default function LeagueSignup() {
 
       <div className="page-shell">
         <section className="relative max-w-6xl mx-auto space-y-12 z-[2]">
+
           {/* Header */}
           <header className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl font-bold text-dew-gold mb-4">
@@ -182,25 +185,28 @@ export default function LeagueSignup() {
               confirmed automatically.
             </p>
           </header>
-{/* --- Acuity Scheduling Embed (Centered Under Header) --- */}
-<div className="max-w-3xl mx-auto mt-6 p-2">
-  <Script
-    src="https://embed.acuityscheduling.com/js/embed.js"
-    strategy="lazyOnload"
-  />
 
-  <iframe
-    src="https://app.acuityscheduling.com/schedule.php?owner=17569879&calendarID=3383478&ref=embedded_csp"
-    title="Schedule Appointment"
-    width="100%"
-    height="800"
-    frameBorder="0"
-    allow="payment"
-    className="rounded-lg border border-slate-700 shadow-lg shadow-black/40"
-  ></iframe>
-</div>
+          {/* --- Full-Width Acuity Embed Below Header --- */}
+          <div className="w-full mx-auto p-2 mt-6">
+            <Script
+              src="https://embed.acuityscheduling.com/js/embed.js"
+              strategy="lazyOnload"
+            />
 
+            <iframe
+              src="https://app.acuityscheduling.com/schedule.php?owner=17569879&ref=embedded_csp"
+              title="Schedule Appointment"
+              width="100%"
+              height="800"
+              frameBorder="0"
+              allow="payment"
+              className="rounded-lg border border-slate-700 shadow-lg shadow-black/40 w-full"
+            ></iframe>
+          </div>
+
+          {/* 2-column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-10 items-start">
+
             {/* Available Leagues */}
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold text-dew-gold mb-1">
@@ -208,9 +214,7 @@ export default function LeagueSignup() {
               </h2>
 
               {loadingLeagues && (
-                <p className="text-slate-200 text-sm">
-                  Loading leagues…
-                </p>
+                <p className="text-slate-200 text-sm">Loading leagues…</p>
               )}
 
               {!loadingLeagues && leagueError && (
@@ -221,8 +225,7 @@ export default function LeagueSignup() {
 
               {!loadingLeagues && !leagueError && leagues.length === 0 && (
                 <p className="text-slate-200 text-sm">
-                  No active leagues are available right now. Please
-                  check back soon or call the shop for details.
+                  No active leagues are available right now.
                 </p>
               )}
 
@@ -230,9 +233,7 @@ export default function LeagueSignup() {
                 {leagues.map((league) => {
                   const isSelected = league.id === selectedLeagueId;
                   const timeLabel = `${league.day_of_week} @ ${
-                    league.start_time
-                      ? formatTime(league.start_time)
-                      : ""
+                    league.start_time ? formatTime(league.start_time) : ""
                   }`;
 
                   return (
@@ -253,14 +254,9 @@ export default function LeagueSignup() {
                       <h3 className="text-lg font-semibold text-dew-gold">
                         {league.name}
                       </h3>
-
+                      <p className="text-slate-200 text-sm mt-1">{timeLabel}</p>
                       <p className="text-slate-200 text-sm mt-1">
-                        {timeLabel}
-                      </p>
-
-                      <p className="text-slate-200 text-sm mt-1">
-                        {formatPrice(league.price)} •{" "}
-                        {league.weeks || "Multiple"} weeks
+                        {formatPrice(league.price)} • {league.weeks || "Multiple"} weeks
                       </p>
 
                       {league.description && (
@@ -274,7 +270,7 @@ export default function LeagueSignup() {
               </div>
             </div>
 
-            {/* Signup Form + Acuity Embed */}
+            {/* Signup Form */}
             <div className="content-panel">
               <h2 className="text-2xl font-semibold text-dew-gold mb-4">
                 Your Information
@@ -287,9 +283,7 @@ export default function LeagueSignup() {
                     {selectedLeague.name}
                   </span>{" "}
                   – {selectedLeague.day_of_week} at{" "}
-                  {selectedLeague.start_time
-                    ? formatTime(selectedLeague.start_time)
-                    : ""}
+                  {selectedLeague.start_time ? formatTime(selectedLeague.start_time) : ""}
                   .
                 </p>
               ) : (
@@ -339,6 +333,7 @@ export default function LeagueSignup() {
                   </div>
                 </div>
 
+                {/* Phone */}
                 <div>
                   <label className="block text-sm font-medium text-slate-200 mb-1">
                     Phone
@@ -352,6 +347,7 @@ export default function LeagueSignup() {
                   />
                 </div>
 
+                {/* Notes */}
                 <div>
                   <label className="block text-sm font-medium text-slate-200 mb-1">
                     Notes (optional)
@@ -379,31 +375,8 @@ export default function LeagueSignup() {
               </form>
 
               <p className="text-slate-400 text-xs mt-3">
-                After submitting, you&apos;ll be redirected to confirm
-                your signup and complete payment through Square.
+                After submitting, you&apos;ll be redirected to confirm your signup and complete payment through Square.
               </p>
-
-              {/* --- Acuity Scheduling Embed --- */}
-              <div className="mt-10">
-                <h2 className="text-xl font-semibold text-dew-gold mb-3">
-                  Schedule Your League Session
-                </h2>
-
-                <Script
-                  src="https://embed.acuityscheduling.com/js/embed.js"
-                  strategy="lazyOnload"
-                />
-
-                <iframe
-                  src="https://app.acuityscheduling.com/schedule.php?owner=17569879&calendarID=3383478&ref=embedded_csp"
-                  title="Schedule Appointment"
-                  width="100%"
-                  height="800"
-                  frameBorder="0"
-                  allow="payment"
-                  className="rounded-lg border border-slate-700 shadow-lg shadow-black/40"
-                ></iframe>
-              </div>
             </div>
           </div>
         </section>
