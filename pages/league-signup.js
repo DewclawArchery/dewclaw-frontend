@@ -183,6 +183,9 @@ export default function LeagueSignup() {
               Choose your league night and complete your info. Payment
               is handled through Square, and your spot will be
               confirmed automatically.
+              <br></br>
+              Top Prize - 2025 Elite Exalt 35 
+              Top Prize <strong>YOUTH</strong> - 2026 Elite Emerse
             </p>
           </header>
 
