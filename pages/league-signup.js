@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
+import Script from "next/script";
 import { apiGet } from "../lib/api";
 
 const WP_BASE =
@@ -40,7 +41,6 @@ export default function LeagueSignup() {
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
 
-  // Load active leagues from WordPress
   useEffect(() => {
     let cancelled = false;
 
@@ -110,7 +110,7 @@ export default function LeagueSignup() {
       email: email.trim(),
       phone: phone.trim() || null,
       notes: notes.trim() || null,
-      payment_mode: "online", // keep aligned with backend default
+      payment_mode: "online",
     };
 
     try {
@@ -134,21 +134,17 @@ export default function LeagueSignup() {
           if (errJson && errJson.message) {
             message = errJson.message;
           }
-        } catch {
-          // ignore JSON parse error, keep generic message
-        }
+        } catch {}
         throw new Error(message);
       }
 
       const json = await res.json();
 
-      // Prefer redirect_url – this is your /thank-you page
       if (json && json.redirect_url) {
         window.location.href = json.redirect_url;
         return;
       }
 
-      // Fallback: show success message if no redirect provided
       setSubmitSuccess(
         "Signup received! Please check your email for confirmation."
       );
@@ -187,7 +183,6 @@ export default function LeagueSignup() {
             </p>
           </header>
 
-          {/* Main layout: Leagues + Form */}
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-10 items-start">
             {/* Available Leagues */}
             <div className="space-y-4">
@@ -262,7 +257,7 @@ export default function LeagueSignup() {
               </div>
             </div>
 
-            {/* Signup Form */}
+            {/* Signup Form + Acuity Embed */}
             <div className="content-panel">
               <h2 className="text-2xl font-semibold text-dew-gold mb-4">
                 Your Information
@@ -370,6 +365,28 @@ export default function LeagueSignup() {
                 After submitting, you&apos;ll be redirected to confirm
                 your signup and complete payment through Square.
               </p>
+
+              {/* --- Acuity Scheduling Embed --- */}
+              <div className="mt-10">
+                <h2 className="text-xl font-semibold text-dew-gold mb-3">
+                  Schedule Your League Session
+                </h2>
+
+                <Script
+                  src="https://embed.acuityscheduling.com/js/embed.js"
+                  strategy="lazyOnload"
+                />
+
+                <iframe
+                  src="https://app.acuityscheduling.com/schedule.php?owner=17569879&calendarID=3383478&ref=embedded_csp"
+                  title="Schedule Appointment"
+                  width="100%"
+                  height="800"
+                  frameBorder="0"
+                  allow="payment"
+                  className="rounded-lg border border-slate-700 shadow-lg shadow-black/40"
+                ></iframe>
+              </div>
             </div>
           </div>
         </section>
