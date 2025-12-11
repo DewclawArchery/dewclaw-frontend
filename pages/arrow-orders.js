@@ -19,8 +19,8 @@ export default function ArrowOrders() {
         </p>
 
         <p className="text-slate-300 mt-6">
-          • Call/Text: <span className="text-dew-gold font-semibold">920-819-8983</span><br />
-          • Email: <span className="text-dew-gold font-semibold">matt@dewclawarchery.com</span>
+          • Call/Text: <span className="text-dew-gold font-semibold">541-772-1896</span><br />
+          • Email: <span className="text-dew-gold font-semibold">info@dewclawarchery.com</span>
         </p>
 
         <div className="mt-10">
