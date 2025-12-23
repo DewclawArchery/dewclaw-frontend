@@ -1,47 +1,41 @@
-import { useState } from "react";
+// pages/technohunt.js
 import Head from "next/head";
-import TechnoHuntCalendar from "../components/TechnoHuntCalendar";
-import TechnoHuntBookingForm from "../components/TechnoHuntBookingForm";
 
-export default function TechnoHuntPage() {
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [confirmed, setConfirmed] = useState(null);
-
+export default function TechnoHuntRedirectPage() {
   return (
     <>
       <Head>
-        <title>TechnoHUNT Booking | Dewclaw Archery</title>
-        <meta
-          name="description"
-          content="Reserve your TechnoHUNT lane at Dewclaw Archery."
-        />
+        <title>Redirecting… | Dewclaw Archery</title>
+        <meta name="robots" content="noindex,nofollow" />
+        <meta httpEquiv="refresh" content="0;url=https://book.dewclawarchery.com/" />
+        <link rel="canonical" href="https://book.dewclawarchery.com/" />
       </Head>
 
-      <section className="max-w-6xl mx-auto py-16 px-4 md:px-6">
-        <h1 className="text-4xl font-bold text-dew-gold text-center mb-10">
-          TechnoHUNT Lane Booking
-        </h1>
+      <main className="max-w-3xl mx-auto py-16 px-4 md:px-6 text-center">
+        <h1 className="text-3xl font-bold text-dew-gold mb-4">Redirecting…</h1>
+        <p className="text-slate-200">
+          Taking you to TechnoHUNT booking.
+        </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <TechnoHuntCalendar onSelectSlot={setSelectedSlot} />
-
-          <TechnoHuntBookingForm
-            selectedSlot={selectedSlot}
-            onBooked={(json) => setConfirmed(json)}
-          />
+        <div className="mt-6">
+          <a
+            href="https://book.dewclawarchery.com/"
+            className="inline-flex items-center justify-center rounded bg-dew-gold px-5 py-3 font-semibold text-black hover:opacity-90"
+          >
+            Continue to Booking
+          </a>
         </div>
-
-        {confirmed && (
-          <div className="mt-10 bg-emerald-900/40 border border-emerald-600 p-6 rounded">
-            <h2 className="text-xl text-emerald-300 font-semibold">
-              Booking Confirmed!
-            </h2>
-            <p className="text-slate-200 mt-2">
-              We’ve reserved your lane. Check your email for details.
-            </p>
-          </div>
-        )}
-      </section>
+      </main>
     </>
   );
+}
+
+// SSR redirect for speed + SEO correctness (works even if JS is disabled)
+export async function getServerSideProps() {
+  return {
+    redirect: {
+      destination: "https://book.dewclawarchery.com/",
+      permanent: false, // keep false until you're 100% sure you won't change this mapping
+    },
+  };
 }
