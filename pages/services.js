@@ -1,5 +1,62 @@
 import Head from "next/head";
-import PricingTable from "../components/PricingTable";
+
+/**
+ * Service pricing data (Phase 1 = static).
+ * Phase 2 suggestion: move this array to /data/servicesPricing.js or a CMS/DB endpoint
+ * so T.E.R.I. and the website can read it from a single source of truth.
+ */
+const SERVICE_PRICING = [
+  { service: "Paper Tune / Basic Diagnosis", price: "$20", notes: "Quick check + recommendation" },
+  { service: "Bow Setup (new bow / accessory install)", price: "From $40", notes: "Varies by setup complexity" },
+  { service: "Cam Timing / Sync", price: "$25", notes: "Includes timing check + adjustment" },
+  { service: "Centershot / Rest Tuning", price: "$25", notes: "Includes basic tuning" },
+  { service: "Peep Install / Re-align", price: "$15", notes: "May require press time" },
+  { service: "Broadhead Tune (in-shop)", price: "From $40", notes: "Depends on time required" },
+  { service: "Cut Arrows (cut-to-length)", price: "$10", notes: "Per dozen (shop shafts)" },
+  { service: "Insert Install / Re-glue", price: "$10", notes: "Per dozen" },
+  { service: "Fletching / Re-fletch", price: "From $30", notes: "Depends on vane/wrap choices" },
+  { service: "String/ Cable Install + Set Up", price: "From $60", notes: "Plus string cost" },
+];
+
+function PricingTable({ title, rows }) {
+  return (
+    <div className="content-panel max-w-5xl mx-auto mt-8">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
+        <h2 className="text-2xl font-semibold text-dew-gold">{title}</h2>
+        <p className="text-slate-400 text-xs">
+          Prices are common estimates. Some builds may vary based on equipment and time required.
+        </p>
+      </div>
+
+      <div className="overflow-x-auto rounded border border-slate-800">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-900/60">
+            <tr>
+              <th className="px-4 py-3 font-semibold text-slate-200">Service</th>
+              <th className="px-4 py-3 font-semibold text-slate-200 whitespace-nowrap">Price</th>
+              <th className="px-4 py-3 font-semibold text-slate-200">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={idx} className="border-t border-slate-800">
+                <td className="px-4 py-3 text-slate-200">{row.service}</td>
+                <td className="px-4 py-3 text-slate-200 whitespace-nowrap">{row.price}</td>
+                <td className="px-4 py-3 text-slate-300">{row.notes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 text-slate-300 text-sm">
+        <p>
+          Not sure what you need? Bring your setup in — we’ll take a look and recommend the best path forward.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function Services() {
   return (
@@ -24,15 +81,15 @@ export default function Services() {
           </p>
         </header>
 
-        {/* NEW — Dynamic Pricing Table */}
-        <PricingTable category="services" title="Service Pricing" />
+        {/* Service Pricing Table (stable + TERI-friendly structure) */}
+        <PricingTable title="Service Pricing" rows={SERVICE_PRICING} />
 
         {/* 3-Column Responsive Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12 mt-16">
           {/* Tuning */}
           <div>
             <h2 className="text-xl font-semibold text-dew-gold mb-3">
-              Tuning & Troubleshooting
+              Tuning &amp; Troubleshooting
             </h2>
             <p className="text-slate-200 leading-relaxed">
               From string stretch to timing issues, we diagnose anything that
@@ -45,7 +102,7 @@ export default function Services() {
           {/* Bow Setup */}
           <div>
             <h2 className="text-xl font-semibold text-dew-gold mb-3">
-              Bow Setup & Repairs
+              Bow Setup &amp; Repairs
             </h2>
             <p className="text-slate-200 leading-relaxed">
               New bow setup, rest installation, timing, cam lean correction,
@@ -74,9 +131,7 @@ export default function Services() {
             </h2>
             <p className="text-slate-200 leading-relaxed">
               Spine testing, cut-to-length, fletching, weight matching, and
-              component selection based on your bow, draw cycle, and goals. Our
-              T.E.R.I.-powered Arrow Builder takes your details and creates a
-              custom build spec.
+              component selection based on your bow, draw cycle, and goals.
             </p>
           </div>
 
