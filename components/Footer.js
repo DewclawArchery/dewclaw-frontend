@@ -1,5 +1,3 @@
-// components/Footer.js
-
 import Link from "next/link";
 
 export default function Footer() {
@@ -19,38 +17,21 @@ export default function Footer() {
 
           {/* LINKS */}
           <div className="flex flex-col text-sm gap-1">
-            <Link href="/" className="hover:text-[#F9A51A]">
-              Home
-            </Link>
-            <Link href="/services" className="hover:text-[#F9A51A]">
-              Services
-            </Link>
+            <Link href="/" className="hover:text-[#F9A51A]">Home</Link>
+            <Link href="/services" className="hover:text-[#F9A51A]">Services</Link>
+            <Link href="/range-info" className="hover:text-[#F9A51A]">Range Info</Link>
+            <Link href="/technohunt" className="hover:text-[#F9A51A]">TechnoHunt Booking</Link>
+            <Link href="/arrow-orders" className="hover:text-[#F9A51A]">Arrow Orders</Link>
 
-            {/* OPS Redirect Pages */}
-            <Link href="/arrow-orders" className="hover:text-[#F9A51A]">
-              Custom Arrows
-            </Link>
-            <Link href="/technohunt" className="hover:text-[#F9A51A]">
-              TechnoHunt Booking
-            </Link>
+            <div className="h-2" />
 
-            {/* Leagues: keep legacy signup + new portal */}
-            <Link href="/league-signup" className="hover:text-[#F9A51A]">
-              League Signup
-            </Link>
-            <Link href="/leagues" className="hover:text-[#F9A51A]">
-              Leagues (New)
-            </Link>
+            <Link href="/leagues" className="hover:text-[#F9A51A]">Leagues</Link>
+            <Link href="/league-signup" className="hover:text-[#F9A51A]">Current League Signup</Link>
 
-            <Link href="/range-info" className="hover:text-[#F9A51A]">
-              Range Info
-            </Link>
-            <Link href="/about" className="hover:text-[#F9A51A]">
-              About
-            </Link>
-            <Link href="/contact" className="hover:text-[#F9A51A]">
-              Contact
-            </Link>
+            <div className="h-2" />
+
+            <Link href="/about" className="hover:text-[#F9A51A]">About</Link>
+            <Link href="/contact" className="hover:text-[#F9A51A]">Contact</Link>
           </div>
 
           {/* HOURS */}
@@ -61,7 +42,6 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* COPYRIGHT */}
         <div className="text-center text-xs text-zinc-600 mt-10">
           © {new Date().getFullYear()} Dewclaw Archery. All Rights Reserved.
         </div>
