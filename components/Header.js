@@ -3,13 +3,32 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 
+const OPS = {
+  bookings:
+    process.env.NEXT_PUBLIC_OPS_BOOKINGS_URL ||
+    "https://book.dewclawarchery.com/",
+  orders:
+    process.env.NEXT_PUBLIC_OPS_ORDERS_URL ||
+    "https://orders.dewclawarchery.com/",
+  leagues:
+    process.env.NEXT_PUBLIC_OPS_LEAGUES_URL ||
+    "https://leagues.dewclawarchery.com/",
+  // Admin intentionally not in public nav (bookmark-only)
+  // admin:
+  //   process.env.NEXT_PUBLIC_OPS_ADMIN_URL ||
+  //   "https://admin.dewclawarchery.com/",
+};
+
 const primaryNav = [
-  { href: "/services", label: "Services" },
-  { href: "/range-info", label: "Range Info" },
-  { href: "/technohunt", label: "TechnoHunt Booking" },
-  { href: "/arrow-orders", label: "Arrow Orders" },
-  { href: "/leagues", label: "Leagues" },
-  { href: "/contact", label: "Contact" },
+  { href: "/services", label: "Services", external: false },
+  { href: "/range-info", label: "Range Info", external: false },
+
+  // OPS modules (absolute URLs)
+  { href: OPS.bookings, label: "TechnoHunt Booking", external: true },
+  { href: OPS.orders, label: "Arrow Orders", external: true },
+  { href: OPS.leagues, label: "Leagues", external: true },
+
+  { href: "/contact", label: "Contact", external: false },
 ];
 
 export default function Header() {
@@ -33,23 +52,35 @@ export default function Header() {
         {/* Desktop nav */}
         <nav className="hidden items-center gap-1 md:flex">
           {primaryNav.map((item) => {
-            const active = router.pathname === item.href;
+            const active = !item.external && router.pathname === item.href;
+
+            const classes = `rounded-full px-3 py-2 text-sm font-medium transition-colors ${
+              active
+                ? "bg-slate-900/80 text-amber-400"
+                : "text-slate-200/90 hover:text-amber-300"
+            }`;
+
+            if (item.external) {
+              return (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className={classes}
+                  rel="noopener noreferrer"
+                >
+                  {item.label}
+                </a>
+              );
+            }
+
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-full px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-slate-900/80 text-amber-400"
-                    : "text-slate-200/90 hover:text-amber-300"
-                }`}
-              >
+              <Link key={item.href} href={item.href} className={classes}>
                 {item.label}
               </Link>
             );
           })}
 
-          {/* CTA */}
+          {/* CTA (keep legacy signup on main site for now) */}
           <Link href="/league-signup" className="ml-2 btn-primary text-xs">
             Join a League
           </Link>
@@ -60,6 +91,8 @@ export default function Header() {
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-black/60 px-3 py-2 text-xs font-semibold text-slate-200 shadow-md shadow-black/40 hover:border-amber-400 md:hidden"
+          aria-expanded={open}
+          aria-label="Toggle navigation menu"
         >
           Menu
         </button>
@@ -70,17 +103,34 @@ export default function Header() {
         <div className="border-t border-slate-800/80 bg-black/90 px-4 pb-4 pt-2 shadow-lg shadow-black/70 md:hidden">
           <nav className="flex flex-col gap-1">
             {primaryNav.map((item) => {
-              const active = router.pathname === item.href;
+              const active = !item.external && router.pathname === item.href;
+
+              const classes = `rounded-full px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-slate-900/80 text-amber-400"
+                  : "text-slate-200/90 hover:text-amber-300"
+              }`;
+
+              if (item.external) {
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={classes}
+                    rel="noopener noreferrer"
+                  >
+                    {item.label}
+                  </a>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className={`rounded-full px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-slate-900/80 text-amber-400"
-                      : "text-slate-200/90 hover:text-amber-300"
-                  }`}
+                  className={classes}
                 >
                   {item.label}
                 </Link>

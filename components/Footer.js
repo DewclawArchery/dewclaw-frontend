@@ -1,5 +1,17 @@
 import Link from "next/link";
 
+const OPS = {
+  bookings:
+    process.env.NEXT_PUBLIC_OPS_BOOKINGS_URL ||
+    "https://book.dewclawarchery.com/",
+  orders:
+    process.env.NEXT_PUBLIC_OPS_ORDERS_URL ||
+    "https://orders.dewclawarchery.com/",
+  leagues:
+    process.env.NEXT_PUBLIC_OPS_LEAGUES_URL ||
+    "https://leagues.dewclawarchery.com/",
+};
+
 export default function Footer() {
   return (
     <footer className="bg-black border-t border-zinc-800 text-zinc-400 mt-16">
@@ -17,21 +29,55 @@ export default function Footer() {
 
           {/* LINKS */}
           <div className="flex flex-col text-sm gap-1">
-            <Link href="/" className="hover:text-[#F9A51A]">Home</Link>
-            <Link href="/services" className="hover:text-[#F9A51A]">Services</Link>
-            <Link href="/range-info" className="hover:text-[#F9A51A]">Range Info</Link>
-            <Link href="/technohunt" className="hover:text-[#F9A51A]">TechnoHunt Booking</Link>
-            <Link href="/arrow-orders" className="hover:text-[#F9A51A]">Arrow Orders</Link>
+            <Link href="/" className="hover:text-[#F9A51A]">
+              Home
+            </Link>
+            <Link href="/services" className="hover:text-[#F9A51A]">
+              Services
+            </Link>
+            <Link href="/range-info" className="hover:text-[#F9A51A]">
+              Range Info
+            </Link>
+
+            {/* OPS module links MUST be absolute */}
+            <a
+              href={OPS.bookings}
+              className="hover:text-[#F9A51A]"
+              rel="noopener noreferrer"
+            >
+              TechnoHunt Booking
+            </a>
+            <a
+              href={OPS.orders}
+              className="hover:text-[#F9A51A]"
+              rel="noopener noreferrer"
+            >
+              Arrow Orders
+            </a>
 
             <div className="h-2" />
 
-            <Link href="/leagues" className="hover:text-[#F9A51A]">Leagues</Link>
-            <Link href="/league-signup" className="hover:text-[#F9A51A]">Current League Signup</Link>
+            <a
+              href={OPS.leagues}
+              className="hover:text-[#F9A51A]"
+              rel="noopener noreferrer"
+            >
+              Leagues
+            </a>
+
+            {/* Keep legacy signup on main site */}
+            <Link href="/league-signup" className="hover:text-[#F9A51A]">
+              Current League Signup
+            </Link>
 
             <div className="h-2" />
 
-            <Link href="/about" className="hover:text-[#F9A51A]">About</Link>
-            <Link href="/contact" className="hover:text-[#F9A51A]">Contact</Link>
+            <Link href="/about" className="hover:text-[#F9A51A]">
+              About
+            </Link>
+            <Link href="/contact" className="hover:text-[#F9A51A]">
+              Contact
+            </Link>
           </div>
 
           {/* HOURS */}
