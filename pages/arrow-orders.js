@@ -1,37 +1,50 @@
+// pages/arrow-orders.js
 import Head from "next/head";
 
-export default function ArrowOrders() {
+export default function ArrowOrdersRedirectPage() {
   return (
     <>
       <Head>
-        <title>Custom Arrow Orders | Dewclaw Archery</title>
+        <title>Redirecting… | Dewclaw Archery</title>
+        <meta name="robots" content="noindex,nofollow" />
+        <meta
+          httpEquiv="refresh"
+          content="0;url=https://orders.dewclawarchery.com/"
+        />
+        <link
+          rel="canonical"
+          href="https://orders.dewclawarchery.com/"
+        />
       </Head>
 
-      <section className="max-w-4xl mx-auto py-20 px-6 text-center">
-        <h1 className="text-4xl font-bold text-dew-gold mb-6">
-          Custom Arrow Orders Temporarily Unavailable
+      <main className="max-w-3xl mx-auto py-16 px-4 md:px-6 text-center">
+        <h1 className="text-3xl font-bold text-dew-gold mb-4">
+          Redirecting…
         </h1>
 
-        <p className="text-slate-200 text-lg max-w-2xl mx-auto">
-          We’re currently updating our custom arrow ordering system to serve you
-          better. Please check back soon, or contact the shop directly if you 
-          need assistance with an arrow build.
+        <p className="text-slate-200">
+          Taking you to custom arrow ordering.
         </p>
 
-        <p className="text-slate-300 mt-6">
-          • Call/Text: <span className="text-dew-gold font-semibold">541-772-1896</span><br />
-          • Email: <span className="text-dew-gold font-semibold">info@dewclawarchery.com</span>
-        </p>
-
-        <div className="mt-10">
+        <div className="mt-6">
           <a
-            href="/"
-            className="inline-block bg-dew-gold text-black font-semibold px-6 py-3 rounded-lg shadow-md hover:bg-yellow-400 transition"
+            href="https://orders.dewclawarchery.com/"
+            className="inline-flex items-center justify-center rounded bg-dew-gold px-5 py-3 font-semibold text-black hover:opacity-90"
           >
-            Return to Home
+            Continue to Arrow Orders
           </a>
         </div>
-      </section>
+      </main>
     </>
   );
+}
+
+// Server-side redirect (fast, SEO-safe, works without JS)
+export async function getServerSideProps() {
+  return {
+    redirect: {
+      destination: "https://orders.dewclawarchery.com/",
+      permanent: false, // flip to true later if desired
+    },
+  };
 }
