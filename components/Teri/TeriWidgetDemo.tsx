@@ -1,4 +1,4 @@
-import { TeriWidget } from '@/components/teri';
+import { TeriWidget } from '@/components/Teri';
 
 export default function TeriWidgetDemo() {
   // Example page context - in real usage, this would be derived from your page
