@@ -1,14 +1,17 @@
 // pages/api/teri/chat.js
 
-import {
-  logTeriEvent,
-  inferIntent,
-  inferPolicyFlags
-} from "../../lib/teri/logging";
-
+import { logTeriEvent, inferIntent, inferPolicyFlags } from "../../lib/teri/logging";
 
 const XAI_BASE_URL = "https://api.x.ai/v1";
 const DEFAULT_MODEL = "grok-4";
+
+// Hard timeout for the xAI request (ms)
+// Set in Vercel env: XAI_TIMEOUT_MS=8000 (recommended 7000–9000)
+const XAI_TIMEOUT_MS = Number(process.env.XAI_TIMEOUT_MS || 8000);
+
+// Tunables for speed
+const MAX_HISTORY_MESSAGES = Number(process.env.TERI_MAX_HISTORY || 10);
+const MAX_TOKENS = Number(process.env.TERI_MAX_TOKENS || 320);
 
 function redactPII(text = "") {
   // Redact common email + phone patterns (lightweight safety net)
@@ -119,12 +122,10 @@ function buildActions(lastUserText, opsLinks) {
     actions.push({ label: "Leagues", url: opsLinks.leagues });
   }
 
-  // Keep it compact
   return actions.slice(0, 3);
 }
 
 function buildArrowGroundingSystemMessage() {
-  // Keep this short + unambiguous. This is a “non-negotiable” anchor for arrow logic.
   return `
 EASTON REFERENCE (PRIMARY SUPPLIER)
 - Prefer Easton Arrow Selector / Easton shaft selection guidance when sanity-checking spine.
@@ -177,7 +178,7 @@ export default async function handler(req, res) {
         typeof m.content === "string" &&
         (m.role === "user" || m.role === "assistant")
     )
-    .slice(-16)
+    .slice(-MAX_HISTORY_MESSAGES)
     .map((m) => ({
       role: m.role,
       content: redactPII(m.content)
@@ -206,21 +207,28 @@ export default async function handler(req, res) {
   const t0 = Date.now();
 
   try {
-    const r = await fetch(`${XAI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        messages: finalMessages,
-        // Slightly lower temp for fewer “creative” technical claims
-        temperature: 0.3,
-        // Lower max tokens to keep responses snappy by default
-        max_tokens: 450
-      })
-    });
+    const controller = new AbortController();
+    const xaiTimer = setTimeout(() => controller.abort(), XAI_TIMEOUT_MS);
+
+    let r;
+    try {
+      r = await fetch(`${XAI_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: finalMessages,
+          temperature: 0.3,
+          max_tokens: MAX_TOKENS
+        }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(xaiTimer);
+    }
 
     const latency_ms = Date.now() - t0;
 
@@ -252,7 +260,11 @@ export default async function handler(req, res) {
       "I’m here—what are you looking to do today: book a TechnoHunt session, build arrows, or check leagues?";
 
     const response_length = typeof content === "string" ? content.length : 0;
-    const policy_flags = inferPolicyFlags({ intent, lastUserText, assistantText: content });
+    const policy_flags = inferPolicyFlags({
+      intent,
+      lastUserText,
+      assistantText: content
+    });
 
     logTeriEvent({
       type: "response",
@@ -269,8 +281,10 @@ export default async function handler(req, res) {
       message: content,
       actions: actions.length ? actions : undefined
     });
-  } catch {
+  } catch (err) {
     const latency_ms = Date.now() - t0;
+    const isAbort =
+      err && (err.name === "AbortError" || String(err).includes("AbortError"));
 
     logTeriEvent({
       type: "response",
@@ -278,15 +292,16 @@ export default async function handler(req, res) {
       intent,
       actions: [],
       ok: false,
-      error: "xai_fetch_failed",
+      error: isAbort ? "xai_timeout" : "xai_fetch_failed",
       latency_ms,
       response_length: 0,
       policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" })
     });
 
     return res.status(502).json({
-      message:
-        "T.E.R.I. couldn’t connect just now. Tap Retry below or try again in a moment."
+      message: isAbort
+        ? "T.E.R.I. is running a little slow right now. Tap Retry, or try a shorter question."
+        : "T.E.R.I. couldn’t connect just now. Tap Retry below or try again in a moment."
     });
   }
 }
