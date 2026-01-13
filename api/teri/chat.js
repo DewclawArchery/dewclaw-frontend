@@ -4,7 +4,7 @@ import {
   logTeriEvent,
   inferIntent,
   inferPolicyFlags
-} from "../../../lib/teri/logging";
+} from "../../lib/teri/logging";
 
 
 const XAI_BASE_URL = "https://api.x.ai/v1";
