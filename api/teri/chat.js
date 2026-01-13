@@ -1,6 +1,11 @@
 // pages/api/teri/chat.js
 
-import { logTeriEvent, inferIntent, inferPolicyFlags } from "@/lib/teri/logging";
+import {
+  logTeriEvent,
+  inferIntent,
+  inferPolicyFlags
+} from "../../../lib/teri/logging";
+
 
 const XAI_BASE_URL = "https://api.x.ai/v1";
 const DEFAULT_MODEL = "grok-4";
