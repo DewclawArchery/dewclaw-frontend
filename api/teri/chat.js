@@ -1,8 +1,10 @@
-// pages/api/teri/chat.js
+// api/teri/chat.js
 
 import { logTeriEvent, inferIntent, inferPolicyFlags } from "../../lib/teri/logging";
+import { getVercelOidcToken } from "@vercel/oidc";
 
-// Vercel AI Gateway (OpenAI-compatible). Using OIDC inside Vercel => NO API KEY / NO Authorization header.
+// Vercel AI Gateway (OpenAI-compatible). For raw fetch, you MUST include an auth token.
+// We use Vercel OIDC inside Vercel functions (no API key needed).
 const AI_GATEWAY_CHAT_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 
 // Keep existing env var names for compatibility with your current dashboard/settings.
@@ -164,11 +166,15 @@ async function callGateway({ messages, model, timeoutMs }) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    // Fetch a short-lived OIDC token from the Vercel runtime.
+    // This is the key piece missing in the previous version.
+    const oidcToken = await getVercelOidcToken();
+
     const r = await fetch(AI_GATEWAY_CHAT_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
-        // IMPORTANT: No Authorization header. Vercel AI Gateway auth uses OIDC inside Vercel.
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${oidcToken}`
       },
       body: JSON.stringify({
         model,
