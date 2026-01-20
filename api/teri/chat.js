@@ -1,24 +1,21 @@
 // api/teri/chat.js
 
 import { logTeriEvent, inferIntent, inferPolicyFlags } from "../../lib/teri/logging";
-import { getVercelOidcToken } from "@vercel/oidc";
 
 /**
  * Vercel AI Gateway (OpenAI-compatible)
- * IMPORTANT:
- * - Raw fetch REQUIRES Authorization
- * - We use Vercel OIDC (no API key)
+ * Auth: API key (AI_GATEWAY_API_KEY)
  */
 const AI_GATEWAY_CHAT_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 
-// Defaults / tunables
+// Tunables
 const DEFAULT_MODEL = "grok-4";
 const XAI_TIMEOUT_MS = Number(process.env.XAI_TIMEOUT_MS || 8000);
 const XAI_FALLBACK_TIMEOUT_MS = Number(process.env.XAI_FALLBACK_TIMEOUT_MS || 5500);
 const MAX_HISTORY_MESSAGES = Number(process.env.TERI_MAX_HISTORY || 10);
 const MAX_TOKENS = Number(process.env.TERI_MAX_TOKENS || 320);
 
-/* ---------------- Utilities ---------------- */
+/* ===================== Utilities ===================== */
 
 function redactPII(text = "") {
   const emailRedacted = text.replace(
@@ -42,7 +39,7 @@ function isTransientStatus(status) {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-/* ---------------- Prompts ---------------- */
+/* ===================== Prompts ===================== */
 
 function buildSystemPrompt({ pageContext, opsLinks }) {
   const pageBits = [];
@@ -60,10 +57,10 @@ VOICE & TONE
 - Confident, never pushy.
 - Safety and accuracy over confidence.
 
-GUARDRAILS
-- Never fabricate prices or availability.
-- Do not collect or request PII.
-- No admin actions or internal ops notes.
+GUARDRAILS (CRITICAL)
+- Do NOT fabricate prices, availability, or guarantees.
+- Do NOT collect or request PII.
+- No admin actions. No internal notes.
 
 TECHNOHUNT (HARD RULE)
 - Never imply rental gear is provided.
@@ -71,7 +68,7 @@ TECHNOHUNT (HARD RULE)
 
 ARROW RULES (CRITICAL)
 - Do not give exact spine without all variables.
-- Longer arrows = weaker dynamic = stiffer static spine.
+- Longer arrow = weaker dynamic = stiffer static spine.
 - Heavier point/insert = weaker dynamic = stiffer static spine.
 - Prefer Easton Arrow Selector guidance.
 
@@ -103,7 +100,7 @@ SPINE RULES (NON-NEGOTIABLE)
 `.trim();
 }
 
-/* ---------------- Ops / Actions ---------------- */
+/* ===================== Ops / Actions ===================== */
 
 function getOpsLinksFromEnv() {
   return {
@@ -130,20 +127,23 @@ function buildActions(lastUserText, opsLinks) {
   return actions.slice(0, 3);
 }
 
-/* ---------------- Gateway Call ---------------- */
+/* ===================== Gateway Call ===================== */
 
 async function callGateway({ messages, model, timeoutMs }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const oidcToken = await getVercelOidcToken();
+    const apiKey = process.env.AI_GATEWAY_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing AI_GATEWAY_API_KEY");
+    }
 
     return await fetch(AI_GATEWAY_CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${oidcToken}`
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model,
@@ -158,7 +158,7 @@ async function callGateway({ messages, model, timeoutMs }) {
   }
 }
 
-/* ---------------- Handler ---------------- */
+/* ===================== Handler ===================== */
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -209,8 +209,9 @@ export default async function handler(req, res) {
   try {
     let r = null;
     let usedModel = primaryModel;
-    let firstAttemptDebugText = "";
+    let firstAttemptBody = "";
 
+    // Attempt 1
     try {
       r = await callGateway({
         messages: finalMessages,
@@ -226,12 +227,13 @@ export default async function handler(req, res) {
     if (!r) {
       shouldRetry = true;
     } else if (!r.ok) {
-      shouldRetry = isTransientStatus(r.status);
       try {
-        firstAttemptDebugText = await r.text();
+        firstAttemptBody = await r.text();
       } catch (_) {}
+      shouldRetry = isTransientStatus(r.status);
     }
 
+    // Attempt 2 (fallback)
     if (shouldRetry) {
       usedModel = fallbackModel;
       r = await callGateway({
@@ -252,10 +254,9 @@ export default async function handler(req, res) {
         status = r.status;
         statusText = r.statusText;
         try {
-          debugSnippet = (await r.text()).slice(0, 300);
+          const t = firstAttemptBody || (await r.text());
+          debugSnippet = (t || "").slice(0, 300);
         } catch (_) {}
-      } else {
-        debugSnippet = firstAttemptDebugText.slice(0, 300);
       }
 
       logTeriEvent({
