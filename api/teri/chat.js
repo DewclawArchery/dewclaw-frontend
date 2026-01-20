@@ -3,26 +3,24 @@
 import { logTeriEvent, inferIntent, inferPolicyFlags } from "../../lib/teri/logging";
 import { getVercelOidcToken } from "@vercel/oidc";
 
-// Vercel AI Gateway (OpenAI-compatible). For raw fetch, you MUST include an auth token.
-// We use Vercel OIDC inside Vercel functions (no API key needed).
+/**
+ * Vercel AI Gateway (OpenAI-compatible)
+ * IMPORTANT:
+ * - Raw fetch REQUIRES Authorization
+ * - We use Vercel OIDC (no API key)
+ */
 const AI_GATEWAY_CHAT_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
 
-// Keep existing env var names for compatibility with your current dashboard/settings.
+// Defaults / tunables
 const DEFAULT_MODEL = "grok-4";
-
-// Hard timeout for the primary model call (ms)
-// Set in Vercel env: XAI_TIMEOUT_MS=8000 (recommended 7000–9000)
 const XAI_TIMEOUT_MS = Number(process.env.XAI_TIMEOUT_MS || 8000);
-
-// Optional retry with a fallback model (ms)
 const XAI_FALLBACK_TIMEOUT_MS = Number(process.env.XAI_FALLBACK_TIMEOUT_MS || 5500);
-
-// Tunables for speed
 const MAX_HISTORY_MESSAGES = Number(process.env.TERI_MAX_HISTORY || 10);
 const MAX_TOKENS = Number(process.env.TERI_MAX_TOKENS || 320);
 
+/* ---------------- Utilities ---------------- */
+
 function redactPII(text = "") {
-  // Redact common email + phone patterns (lightweight safety net)
   const emailRedacted = text.replace(
     /([A-Z0-9._%+-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi,
     "[email redacted]"
@@ -33,6 +31,18 @@ function redactPII(text = "") {
   );
   return phoneRedacted;
 }
+
+function normalizeGatewayModel(model) {
+  if (!model) return "xai/grok-4";
+  if (model.includes("/")) return model;
+  return `xai/${model}`;
+}
+
+function isTransientStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+/* ---------------- Prompts ---------------- */
 
 function buildSystemPrompt({ pageContext, opsLinks }) {
   const pageBits = [];
@@ -47,68 +57,55 @@ You are T.E.R.I. (Technical Equipment Recommendation Intelligence), Dewclaw Arch
 
 VOICE & TONE
 - Friendly, knowledgeable pro-shop staff.
-- Confident, never pushy. Recommendation-driven (“Here’s what I’d run…”).
-- Prioritize safety, fit, and customer experience over upselling.
+- Confident, never pushy.
+- Safety and accuracy over confidence.
 
-PHASE 1 SCOPE
-- Help customers decide what to book/order and where to go next.
-- You can answer questions about TechnoHunt sessions, custom arrows/components, leagues/events, store policies/hours/general info.
-- You do NOT execute payments or create/modify bookings/orders.
+GUARDRAILS
+- Never fabricate prices or availability.
+- Do not collect or request PII.
+- No admin actions or internal ops notes.
 
-GUARDRAILS (CRITICAL)
-- Do NOT fabricate prices, availability, inventory, or guarantees.
-- If you cannot verify something, say so clearly.
-- Offer best-practice guidance + direct them to confirm on booking/order pages or contact staff.
-- Do NOT ask for or collect PII (no email/phone/order IDs). If a user provides it, ignore it and continue.
-- No admin actions. No internal ops notes. No secrets.
+TECHNOHUNT (HARD RULE)
+- Never imply rental gear is provided.
+- Assume shooters bring their own equipment.
 
-TECHNOHUNT ROOM POLICY (HARD RULE)
-- Do NOT suggest rental gear or imply “no equipment needed” for TechnoHunt.
-- Do NOT imply Dewclaw provides bows, arrows, or rental equipment in the TechnoHunt room.
-- Assume TechnoHunt shooters bring their own equipment unless staff explicitly confirms otherwise.
-- If a user is new or does not own equipment, recommend stopping by or calling the pro shop first so staff can help them get set up safely before booking TechnoHunt.
-- Never route a brand-new shooter directly into TechnoHunt as a gear-free experience.
+ARROW RULES (CRITICAL)
+- Do not give exact spine without all variables.
+- Longer arrows = weaker dynamic = stiffer static spine.
+- Heavier point/insert = weaker dynamic = stiffer static spine.
+- Prefer Easton Arrow Selector guidance.
 
-ARROW RECOMMENDATION RULES (CRITICAL)
-- Do NOT give an exact spine recommendation unless the key variables are known:
-  (1) bow type (compound/trad), (2) draw weight, (3) draw length, (4) FINAL arrow cut length (carbon-to-carbon),
-  (5) intended point/broadhead weight, and (6) notable insert/outsert weight (if heavy).
-- If any key variable is missing: ask 1–2 clarifying questions and give only a cautious starting range, NOT a final answer.
-- Avoid absolute claims like “X is always more forgiving.” Say: “Best match tunes easiest; too weak or too stiff can both tune poorly.”
-- Default to manufacturer guidance when appropriate: Easton Arrow Selector / Easton shaft selection resources are preferred references.
-
-ARROW SPINE LOGIC (HARD RULES — DO NOT CONTRADICT)
-- Longer arrow length => WEAKER dynamic spine => typically requires STIFFER static spine (lower number).
-- Heavier point/insert/outsert => WEAKER dynamic spine => typically requires STIFFER static spine (lower number).
-- More aggressive/faster cam systems => often require STIFFER spine than mild cams at the same draw weight.
-- When in doubt between two valid options, recommend confirming with a spine chart/selector (Easton) or Dewclaw staff.
-
-DEFAULT BREVITY (IMPORTANT)
-- Default responses should be brief and fast: ~4–8 lines total.
-- Use bullets only when they add clarity.
-- Ask 1–2 clarifying questions instead of writing long explanations.
-- Go deeper only if the user asks.
-
-RESPONSE STRUCTURE (DEFAULT)
-1) Direct answer first (1–2 short sentences).
-2) Then 2–4 bullets (only if helpful).
-3) Ask 1–2 clarifying questions if required to be accurate.
-4) If relevant, include “Next steps” with links (booking / arrow orders / leagues).
+DEFAULT BREVITY
+- 4–8 lines.
+- Ask 1–2 clarifying questions if needed.
 
 PAGE CONTEXT
 ${pageBits.length ? pageBits.join("\n") : "No page context provided."}
 
-OFFICIAL NEXT-STEP LINKS (use these when routing)
-- Booking Calendar: ${opsLinks.booking}
+NEXT STEPS
+- Booking: ${opsLinks.booking}
 - Arrow Orders: ${opsLinks.orders}
 - Leagues: ${opsLinks.leagues}
-
-Always follow guardrails. If asked for exact pricing or exact availability, instruct the user to confirm on the relevant page.
 `.trim();
 }
 
+function buildArrowGroundingSystemMessage() {
+  return `
+EASTON REFERENCE (PRIMARY)
+- Use Easton Arrow Selector as authoritative reference.
+- Do not paste charts.
+- Ask for missing variables.
+
+SPINE RULES (NON-NEGOTIABLE)
+- Longer arrow = stiffer spine needed.
+- Heavier point/insert = stiffer spine needed.
+- Never claim “weaker is more forgiving.”
+`.trim();
+}
+
+/* ---------------- Ops / Actions ---------------- */
+
 function getOpsLinksFromEnv() {
-  // Fall back to canonical public URLs if env vars aren't set
   return {
     booking: process.env.OPS_BOOKINGS_URL || "https://book.dewclawarchery.com",
     orders: process.env.OPS_ORDERS_URL || "https://orders.dewclawarchery.com",
@@ -120,57 +117,29 @@ function buildActions(lastUserText, opsLinks) {
   const t = (lastUserText || "").toLowerCase();
   const actions = [];
 
-  if (/book|booking|calendar|technohunt|session|availability|openings/.test(t)) {
+  if (/book|booking|calendar|technohunt|session/.test(t)) {
     actions.push({ label: "Booking Calendar", url: opsLinks.booking });
   }
-  if (/arrow|arrows|shaft|spine|wrap|point|insert|vane|fletch/.test(t)) {
+  if (/arrow|arrows|shaft|spine|insert|point|fletch/.test(t)) {
     actions.push({ label: "Arrow Orders", url: opsLinks.orders });
   }
-  if (/league|leagues|event|events|tournament/.test(t)) {
+  if (/league|event|tournament/.test(t)) {
     actions.push({ label: "Leagues", url: opsLinks.leagues });
   }
 
   return actions.slice(0, 3);
 }
 
-function buildArrowGroundingSystemMessage() {
-  return `
-EASTON REFERENCE (PRIMARY SUPPLIER)
-- Prefer Easton Arrow Selector / Easton shaft selection guidance when sanity-checking spine.
-- If the user wants a reference link, you may share:
-  Easton Arrow Selector: https://eastonarchery.com/selector/
-- Do NOT paste full charts. Use them as a reference and ask for missing variables.
-
-ARROW SPINE RULES (NON-NEGOTIABLE)
-- Longer arrow = weaker dynamic => needs stiffer static spine (lower number).
-- Heavier point/insert = weaker dynamic => needs stiffer static spine (lower number).
-- Do not claim “weaker is more forgiving.” The best match tunes easiest; too weak or too stiff can both tune poorly.
-- If key variables are missing, ask 1–2 questions (bow type, draw weight, cut length, point weight).
-`.trim();
-}
-
-function normalizeGatewayModel(model) {
-  // AI Gateway uses names like: "xai/grok-4"
-  // Keep backward compatibility if env still provides "grok-4" etc.
-  if (!model) return "xai/grok-4";
-  if (model.includes("/")) return model;
-  return `xai/${model}`;
-}
-
-function isTransientStatus(status) {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
-}
+/* ---------------- Gateway Call ---------------- */
 
 async function callGateway({ messages, model, timeoutMs }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Fetch a short-lived OIDC token from the Vercel runtime.
-    // This is the key piece missing in the previous version.
     const oidcToken = await getVercelOidcToken();
 
-    const r = await fetch(AI_GATEWAY_CHAT_URL, {
+    return await fetch(AI_GATEWAY_CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -184,12 +153,12 @@ async function callGateway({ messages, model, timeoutMs }) {
       }),
       signal: controller.signal
     });
-
-    return r;
   } finally {
     clearTimeout(timer);
   }
 }
+
+/* ---------------- Handler ---------------- */
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -198,51 +167,35 @@ export default async function handler(req, res) {
   }
 
   const opsLinks = getOpsLinksFromEnv();
-
   const body = req.body || {};
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const pageContext = body.pageContext || {};
 
-  // Last user message (for actions + intent)
   const lastUser = [...messages].reverse().find((m) => m?.role === "user");
   const lastUserTextRaw = lastUser?.content || "";
   const lastUserText = redactPII(lastUserTextRaw);
 
-  // Infer intent early (used to decide whether to add arrow grounding)
   const intent = inferIntent({ lastUserText, pageContext });
   const actions = buildActions(lastUserText, opsLinks);
 
-  // Clean history: only user/assistant, no PII, keep it short for speed
   const cleanedHistory = messages
-    .filter(
-      (m) =>
-        m &&
-        typeof m.content === "string" &&
-        (m.role === "user" || m.role === "assistant")
-    )
+    .filter((m) => m && typeof m.content === "string" && (m.role === "user" || m.role === "assistant"))
     .slice(-MAX_HISTORY_MESSAGES)
-    .map((m) => ({
-      role: m.role,
-      content: redactPII(m.content)
-    }));
-
-  const systemPrompt = buildSystemPrompt({ pageContext, opsLinks });
+    .map((m) => ({ role: m.role, content: redactPII(m.content) }));
 
   const finalMessages = [
-    { role: "system", content: systemPrompt },
-    ...(intent && intent.startsWith("arrows_")
+    { role: "system", content: buildSystemPrompt({ pageContext, opsLinks }) },
+    ...(intent?.startsWith("arrows_")
       ? [{ role: "system", content: buildArrowGroundingSystemMessage() }]
       : []),
     ...cleanedHistory
   ];
 
-  // Models (preserve existing env var names; normalize to AI Gateway names)
   const primaryModel = normalizeGatewayModel(process.env.XAI_MODEL || DEFAULT_MODEL);
   const fallbackModel = normalizeGatewayModel(
     process.env.XAI_FALLBACK_MODEL || "grok-4.1-fast-non-reasoning"
   );
 
-  // Request log (no raw content)
   logTeriEvent({
     type: "request",
     page: pageContext?.path || null,
@@ -251,7 +204,6 @@ export default async function handler(req, res) {
     useModel: primaryModel
   });
 
-  // Measure end-to-end model call latency (includes retry if needed)
   const t0 = Date.now();
 
   try {
@@ -259,33 +211,27 @@ export default async function handler(req, res) {
     let usedModel = primaryModel;
     let firstAttemptDebugText = "";
 
-    // Attempt 1 (primary)
     try {
       r = await callGateway({
         messages: finalMessages,
         model: primaryModel,
         timeoutMs: XAI_TIMEOUT_MS
       });
-    } catch (e) {
-      // If fetch threw (timeout/network), we can retry below
+    } catch (_) {
       r = null;
     }
 
-    // Decide if retry is warranted
     let shouldRetry = false;
 
     if (!r) {
       shouldRetry = true;
     } else if (!r.ok) {
       shouldRetry = isTransientStatus(r.status);
-      if (process.env.NODE_ENV === "development") {
-        try {
-          firstAttemptDebugText = await r.text();
-        } catch (_) {}
-      }
+      try {
+        firstAttemptDebugText = await r.text();
+      } catch (_) {}
     }
 
-    // Attempt 2 (fallback, fast)
     if (shouldRetry) {
       usedModel = fallbackModel;
       r = await callGateway({
@@ -298,12 +244,18 @@ export default async function handler(req, res) {
     const latency_ms = Date.now() - t0;
 
     if (!r || !r.ok) {
-      // Capture debug text safely (dev only)
-      let debugText = firstAttemptDebugText;
-      if (r && process.env.NODE_ENV === "development") {
+      let status = null;
+      let statusText = null;
+      let debugSnippet = "";
+
+      if (r) {
+        status = r.status;
+        statusText = r.statusText;
         try {
-          debugText = debugText || (await r.text());
+          debugSnippet = (await r.text()).slice(0, 300);
         } catch (_) {}
+      } else {
+        debugSnippet = firstAttemptDebugText.slice(0, 300);
       }
 
       logTeriEvent({
@@ -316,49 +268,22 @@ export default async function handler(req, res) {
         latency_ms,
         response_length: 0,
         policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" }),
-        useModel: usedModel
+        useModel: usedModel,
+        status,
+        statusText,
+        debug: debugSnippet
       });
 
       return res.status(502).json({
         message:
-          "T.E.R.I. couldn’t reach the brain right now. Tap Retry below or try again in a moment.",
-        debug: process.env.NODE_ENV === "development" ? debugText : undefined
+          "T.E.R.I. couldn’t reach the brain right now. Tap Retry below or try again in a moment."
       });
     }
 
-    let data;
-    try {
-      data = await r.json();
-    } catch (e) {
-      logTeriEvent({
-        type: "response",
-        page: pageContext?.path || null,
-        intent,
-        actions: [],
-        ok: false,
-        error: "xai_bad_json",
-        latency_ms,
-        response_length: 0,
-        policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" }),
-        useModel: usedModel
-      });
-
-      return res.status(502).json({
-        message:
-          "T.E.R.I. got an unexpected response. Tap Retry below or try again in a moment."
-      });
-    }
-
+    const data = await r.json();
     const content =
       data?.choices?.[0]?.message?.content ||
-      "I’m here—what are you looking to do today: book a TechnoHunt session, build arrows, or check leagues?";
-
-    const response_length = typeof content === "string" ? content.length : 0;
-    const policy_flags = inferPolicyFlags({
-      intent,
-      lastUserText,
-      assistantText: content
-    });
+      "I’m here—what are you looking to do today?";
 
     logTeriEvent({
       type: "response",
@@ -367,8 +292,8 @@ export default async function handler(req, res) {
       actions: actions.map((a) => a.label),
       ok: true,
       latency_ms,
-      response_length,
-      policy_flags,
+      response_length: content.length,
+      policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: content }),
       useModel: usedModel
     });
 
@@ -378,8 +303,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     const latency_ms = Date.now() - t0;
-    const isAbort =
-      err && (err.name === "AbortError" || String(err).includes("AbortError"));
 
     logTeriEvent({
       type: "response",
@@ -387,16 +310,15 @@ export default async function handler(req, res) {
       intent,
       actions: [],
       ok: false,
-      error: isAbort ? "xai_timeout" : "xai_fetch_failed",
+      error: "xai_exception",
       latency_ms,
       response_length: 0,
       policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" })
     });
 
     return res.status(502).json({
-      message: isAbort
-        ? "T.E.R.I. is running a little slow right now. Tap Retry, or try a shorter question."
-        : "T.E.R.I. couldn’t connect just now. Tap Retry below or try again in a moment."
+      message:
+        "T.E.R.I. couldn’t connect just now. Tap Retry below or try again in a moment."
     });
   }
 }
