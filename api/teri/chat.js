@@ -2,12 +2,18 @@
 
 import { logTeriEvent, inferIntent, inferPolicyFlags } from "../../lib/teri/logging";
 
-const XAI_BASE_URL = "https://api.x.ai/v1";
+// Vercel AI Gateway (OpenAI-compatible). Using OIDC inside Vercel => NO API KEY / NO Authorization header.
+const AI_GATEWAY_CHAT_URL = "https://ai-gateway.vercel.sh/v1/chat/completions";
+
+// Keep existing env var names for compatibility with your current dashboard/settings.
 const DEFAULT_MODEL = "grok-4";
 
-// Hard timeout for the xAI request (ms)
+// Hard timeout for the primary model call (ms)
 // Set in Vercel env: XAI_TIMEOUT_MS=8000 (recommended 7000–9000)
 const XAI_TIMEOUT_MS = Number(process.env.XAI_TIMEOUT_MS || 8000);
+
+// Optional retry with a fallback model (ms)
+const XAI_FALLBACK_TIMEOUT_MS = Number(process.env.XAI_FALLBACK_TIMEOUT_MS || 5500);
 
 // Tunables for speed
 const MAX_HISTORY_MESSAGES = Number(process.env.TERI_MAX_HISTORY || 10);
@@ -141,20 +147,50 @@ ARROW SPINE RULES (NON-NEGOTIABLE)
 `.trim();
 }
 
+function normalizeGatewayModel(model) {
+  // AI Gateway uses names like: "xai/grok-4"
+  // Keep backward compatibility if env still provides "grok-4" etc.
+  if (!model) return "xai/grok-4";
+  if (model.includes("/")) return model;
+  return `xai/${model}`;
+}
+
+function isTransientStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function callGateway({ messages, model, timeoutMs }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const r = await fetch(AI_GATEWAY_CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+        // IMPORTANT: No Authorization header. Vercel AI Gateway auth uses OIDC inside Vercel.
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.3,
+        max_tokens: MAX_TOKENS
+      }),
+      signal: controller.signal
+    });
+
+    return r;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({
-      message: "Server is missing XAI_API_KEY. Set it in environment variables."
-    });
-  }
-
-  const model = process.env.XAI_MODEL || DEFAULT_MODEL;
   const opsLinks = getOpsLinksFromEnv();
 
   const body = req.body || {};
@@ -194,46 +230,75 @@ export default async function handler(req, res) {
     ...cleanedHistory
   ];
 
+  // Models (preserve existing env var names; normalize to AI Gateway names)
+  const primaryModel = normalizeGatewayModel(process.env.XAI_MODEL || DEFAULT_MODEL);
+  const fallbackModel = normalizeGatewayModel(
+    process.env.XAI_FALLBACK_MODEL || "grok-4.1-fast-non-reasoning"
+  );
+
   // Request log (no raw content)
   logTeriEvent({
     type: "request",
     page: pageContext?.path || null,
     intent,
     hasHistory: cleanedHistory.length > 1,
-    useModel: model
+    useModel: primaryModel
   });
 
-  // Measure end-to-end model call latency
+  // Measure end-to-end model call latency (includes retry if needed)
   const t0 = Date.now();
 
   try {
-    const controller = new AbortController();
-    const xaiTimer = setTimeout(() => controller.abort(), XAI_TIMEOUT_MS);
+    let r = null;
+    let usedModel = primaryModel;
+    let firstAttemptDebugText = "";
 
-    let r;
+    // Attempt 1 (primary)
     try {
-      r = await fetch(`${XAI_BASE_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          messages: finalMessages,
-          temperature: 0.3,
-          max_tokens: MAX_TOKENS
-        }),
-        signal: controller.signal
+      r = await callGateway({
+        messages: finalMessages,
+        model: primaryModel,
+        timeoutMs: XAI_TIMEOUT_MS
       });
-    } finally {
-      clearTimeout(xaiTimer);
+    } catch (e) {
+      // If fetch threw (timeout/network), we can retry below
+      r = null;
+    }
+
+    // Decide if retry is warranted
+    let shouldRetry = false;
+
+    if (!r) {
+      shouldRetry = true;
+    } else if (!r.ok) {
+      shouldRetry = isTransientStatus(r.status);
+      if (process.env.NODE_ENV === "development") {
+        try {
+          firstAttemptDebugText = await r.text();
+        } catch (_) {}
+      }
+    }
+
+    // Attempt 2 (fallback, fast)
+    if (shouldRetry) {
+      usedModel = fallbackModel;
+      r = await callGateway({
+        messages: finalMessages,
+        model: fallbackModel,
+        timeoutMs: XAI_FALLBACK_TIMEOUT_MS
+      });
     }
 
     const latency_ms = Date.now() - t0;
 
-    if (!r.ok) {
-      const debugText = await r.text();
+    if (!r || !r.ok) {
+      // Capture debug text safely (dev only)
+      let debugText = firstAttemptDebugText;
+      if (r && process.env.NODE_ENV === "development") {
+        try {
+          debugText = debugText || (await r.text());
+        } catch (_) {}
+      }
 
       logTeriEvent({
         type: "response",
@@ -241,10 +306,11 @@ export default async function handler(req, res) {
         intent,
         actions: [],
         ok: false,
-        error: "xai_non_200",
+        error: r ? "xai_non_200" : "xai_fetch_failed",
         latency_ms,
         response_length: 0,
-        policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" })
+        policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" }),
+        useModel: usedModel
       });
 
       return res.status(502).json({
@@ -254,7 +320,29 @@ export default async function handler(req, res) {
       });
     }
 
-    const data = await r.json();
+    let data;
+    try {
+      data = await r.json();
+    } catch (e) {
+      logTeriEvent({
+        type: "response",
+        page: pageContext?.path || null,
+        intent,
+        actions: [],
+        ok: false,
+        error: "xai_bad_json",
+        latency_ms,
+        response_length: 0,
+        policy_flags: inferPolicyFlags({ intent, lastUserText, assistantText: "" }),
+        useModel: usedModel
+      });
+
+      return res.status(502).json({
+        message:
+          "T.E.R.I. got an unexpected response. Tap Retry below or try again in a moment."
+      });
+    }
+
     const content =
       data?.choices?.[0]?.message?.content ||
       "I’m here—what are you looking to do today: book a TechnoHunt session, build arrows, or check leagues?";
@@ -274,7 +362,8 @@ export default async function handler(req, res) {
       ok: true,
       latency_ms,
       response_length,
-      policy_flags
+      policy_flags,
+      useModel: usedModel
     });
 
     return res.status(200).json({
