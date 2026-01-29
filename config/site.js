@@ -1,4 +1,4 @@
-export const SHOW_HOLIDAY_BANNER = false;
+export const SHOW_HOLIDAY_BANNER = true;
 
 export const HOLIDAY_BANNER_TEXT =
-  "🎄 Holiday Hours: Closed 12/24-12/25 & 12/31-1/1 • Happy Holidays from Dewclaw Archery! 🎄";
+  "Our shop will be closed on Saturday, February 14, 2026.Regular hours resume Wednesday, February 18th.Thank you for understanding!";
