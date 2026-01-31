@@ -65,10 +65,14 @@ export default function Footer() {
               Leagues
             </a>
 
-            {/* Keep legacy signup on main site */}
-            <Link href="bracketchamp.dewclawarchery.com" className="hover:text-[#F9A51A]">
-              Bracket Champ
-            </Link>
+            <a
+  href="https://bracketchamp.dewclawarchery.com"
+  className="hover:text-[#F9A51A]"
+  rel="noopener noreferrer"
+>
+  Bracket Champ
+</a>
+
 
             <div className="h-2" />
 
