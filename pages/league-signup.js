@@ -28,26 +28,8 @@ export default function LeagueSignup() {
               <span className="font-semibold">Dewclaw OPS leagues portal</span>.
               Click below to view available leagues and reserve your time slot.
             </p>
+</header>
 
-            {/* Prize callouts */}
-            <div className="mt-5 rounded-lg border border-slate-700/70 bg-slate-900/50 px-5 py-4 text-left">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <p className="text-slate-200 text-sm">
-                  <span className="font-semibold text-dew-gold">Top Prize:</span>{" "}
-                  2025 Elite Exalt 35
-                </p>
-                <p className="text-slate-200 text-sm">
-                  <span className="font-semibold text-dew-gold">
-                    Top Prize (Youth):
-                  </span>{" "}
-                  2026 Elite Emerse
-                </p>
-              </div>
-              <p className="text-slate-400 text-xs mt-3">
-                Prize details subject to change based on availability.
-              </p>
-            </div>
-          </header>
 
           {/* Portal Notice + CTAs */}
           <div className="content-panel max-w-5xl mx-auto">
@@ -73,7 +55,7 @@ export default function LeagueSignup() {
                 href="mailto:Info@dewclawarchery.com?subject=League%20Signup%20Help%20Request&body=Hi%20Dewclaw%20Team%2C%0A%0AI%20need%20help%20with%20league%20signup.%20Here%20are%20my%20details%3A%0A%0AName%3A%20%0APhone%3A%20%0AEmail%3A%20%0ALeague%20name%20(if%20known)%3A%20%0APreferred%20day%2Ftime%3A%20%0A%0AThank%20you!"
                 className="inline-flex justify-center rounded border border-slate-700/70 bg-black/40 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-amber-400 transition"
               >
-                Email for Help (No Phone Calls)
+                Email for Help
               </a>
             </div>
 
